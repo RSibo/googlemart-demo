@@ -222,6 +222,59 @@
             color: #333;
             align-self: flex-start;
         }
+        /* Settings Styles */
+        #settings-container {
+            display: none;
+            flex-direction: column;
+            padding: 15px;
+            gap: 10px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        #settings-container label {
+            display: flex;
+            flex-direction: column;
+            font-size: 14px;
+            color: #333;
+        }
+        #settings-container input, #settings-container select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+        #settings-container button {
+            background-color: #00875a;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        #settings-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            margin-left: auto;
+        }
+        #avatar-display {
+            width: 100%;
+            height: 150px;
+            background-color: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        #avatar-frame {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
@@ -231,7 +284,7 @@
             <input type="text" placeholder="Search products...">
         </div>
         <div>
-            <span>My Account</span> | <span>$0.00</span>
+            <span>My Account</span> | <span>$0.00</span> | <span id="cart-display">🛒 Cart (<span id="cart-count">0</span>)</span>
         </div>
     </header>
     
@@ -250,12 +303,12 @@
                 <div>
                     <div class="product-image">
                         <!-- Using generic placeholder if no image -->
-                        <img src="https://picsum.photos/seed/{{sku}}/200/150" alt="{{product.name}}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;">
+                        <img src="https://loremflickr.com/200/150/grocery,{{product.image_keyword}}" alt="{{product.name}}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;">
                     </div>
                     <div class="product-price">${{ "%.2f"|format(product.price) }}</div>
                     <div class="product-name">{{ product.name }}</div>
                 </div>
-                <button class="add-btn">Add to cart</button>
+                <button class="add-btn" data-sku="{{sku}}">Add to cart</button>
             </div>
             {% endfor %}
         </div>
@@ -270,11 +323,72 @@
     <!-- Chat Flyout -->
     <div id="chat-flyout">
         <div id="chat-header">
-            <img src="/static/avatar.png" alt="Chef">
+            <img src="/static/avatar.png" alt="Chef" style="display:none;">
             <span>Virtual Chef</span>
+            <button id="settings-btn" title="Settings">⚙️</button>
+        </div>
+        <div id="avatar-display">
+            <img id="avatar-frame" src="/static/avatar.png" alt="Avatar Frame">
         </div>
         <div id="chat-container">
             <!-- Messages will appear here -->
+        </div>
+        <div id="settings-container">
+            <h3>Settings</h3>
+            <label>Access Token: <input type="password" id="access-token"></label>
+            <label>Project ID: <input type="text" id="project-id"></label>
+            <label>Location: <input type="text" id="location" value="us-central1"></label>
+            <label>Model ID: <input type="text" id="model-id" value="gemini-3.1-flash-live-preview"></label>
+            <label>Voice:
+                <select id="voice-select">
+                    <option value="Zephyr">Zephyr</option>
+                    <option value="Kore">Kore</option>
+                    <option value="Orus">Orus</option>
+                    <option value="Autonoe">Autonoe</option>
+                    <option value="Umbriel">Umbriel</option>
+                    <option value="Erinome">Erinome</option>
+                    <option value="Laomedeia">Laomedeia</option>
+                    <option value="Schedar">Schedar</option>
+                    <option value="Achird">Achird</option>
+                    <option value="Sadachbia">Sadachbia</option>
+                    <option value="Puck">Puck</option>
+                    <option value="Fenrir">Fenrir</option>
+                    <option value="Aoede">Aoede</option>
+                    <option value="Enceladus">Enceladus</option>
+                    <option value="Algieba">Algieba</option>
+                    <option value="Algenib">Algenib</option>
+                    <option value="Achernar">Achernar</option>
+                    <option value="Gacrux">Gacrux</option>
+                    <option value="Zubenelgenubi">Zubenelgenubi</option>
+                    <option value="Sadaltager">Sadaltager</option>
+                    <option value="Charon">Charon</option>
+                    <option value="Leda">Leda</option>
+                    <option value="Callirrhoe">Callirrhoe</option>
+                    <option value="Iapetus">Iapetus</option>
+                    <option value="Despina">Despina</option>
+                    <option value="Rasalgethi">Rasalgethi</option>
+                    <option value="Alnilam">Alnilam</option>
+                    <option value="Pulcherrima">Pulcherrima</option>
+                    <option value="Vindemiatrix">Vindemiatrix</option>
+                    <option value="Sulafat">Sulafat</option>
+                </select>
+            </label>
+            <label>Avatar:
+                <select id="avatar-select">
+                    <option value="Kira">Kira (Realistic)</option>
+                    <option value="Ingrid">Ingrid (Realistic)</option>
+                    <option value="Vera">Vera (Realistic)</option>
+                    <option value="Sam">Sam (Realistic)</option>
+                    <option value="Jay">Jay (Realistic)</option>
+                    <option value="Paul">Paul (Realistic)</option>
+                    <option value="Ben">Ben (Stylized)</option>
+                    <option value="Kai">Kai (Stylized)</option>
+                    <option value="Carmen">Carmen (Stylized)</option>
+                    <option value="Leo">Leo (Stylized)</option>
+                    <option value="Piper">Piper (Stylized)</option>
+                </select>
+            </label>
+            <button id="save-settings-btn">Save</button>
         </div>
         <div id="input-container">
             <input type="text" id="user-input" placeholder="Ask the Chef...">
