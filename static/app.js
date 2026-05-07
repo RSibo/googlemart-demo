@@ -36,9 +36,9 @@ function sendSetup() {
 function loadSettings() {
     return {
         accessToken: localStorage.getItem('accessToken') || '',
-        projectId: localStorage.getItem('projectId') || '',
+        projectId: localStorage.getItem('projectId') || 'cloud-llm-preview1',
         location: localStorage.getItem('location') || 'us-central1',
-        modelId: localStorage.getItem('modelId') || 'gemini-3.1-flash-live-preview',
+        modelId: localStorage.getItem('modelId') || 'gemini-3.1-flash-live-preview-04-2026',
         voice: localStorage.getItem('voice') || 'Puck',
         avatar: localStorage.getItem('avatar') || 'Ben'
     };
@@ -154,14 +154,119 @@ saveSettingsBtn.addEventListener('click', () => {
 });
 
 // Cart functionality
-let cart = [];
+let cart = {}; // SKU -> quantity
 const cartCountSpan = document.getElementById('cart-count');
+const cartDisplay = document.getElementById('cart-display');
+const cartFlyout = document.getElementById('cart-flyout');
+const cartItemsContainer = document.getElementById('cart-items-container');
+
+// Scrape product data from DOM
+const productsData = {};
+document.querySelectorAll('.product-card').forEach(card => {
+    const sku = card.querySelector('.add-btn').getAttribute('data-sku');
+    const name = card.querySelector('.product-name').textContent;
+    const price = parseFloat(card.querySelector('.product-price').textContent.replace('$', ''));
+    productsData[sku] = { name, price };
+});
+
+function updateCartUI() {
+    let totalCount = 0;
+    cartItemsContainer.innerHTML = '';
+    let hasItems = false;
+    
+    for (const sku in cart) {
+        const qty = cart[sku];
+        if (qty > 0) {
+            hasItems = true;
+            totalCount += qty;
+            const item = productsData[sku];
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('cart-item');
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.innerHTML = `
+                <div style="font-size:14px; font-weight:bold;">${item ? item.name : sku}</div>
+                <div style="font-size:12px; color:#666;">$${item ? item.price.toFixed(2) : '0.00'} each</div>
+            `;
+            itemDiv.appendChild(infoDiv);
+            
+            const select = document.createElement('select');
+            for (let i = 0; i <= 10; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                if (i === qty) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+            
+            select.addEventListener('change', (e) => {
+                const newQty = parseInt(e.target.value);
+                if (newQty === 0) {
+                    delete cart[sku];
+                } else {
+                    cart[sku] = newQty;
+                }
+                updateCartUI();
+                sendCartToChef();
+            });
+            
+            itemDiv.appendChild(select);
+            cartItemsContainer.appendChild(itemDiv);
+        }
+    }
+    
+    cartCountSpan.textContent = totalCount;
+    
+    if (!hasItems) {
+        cartItemsContainer.innerHTML = '<div class="cart-item">No items in cart</div>';
+    }
+}
+
+function sendCartToChef() {
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: 'cart_update',
+            content: cart
+        }));
+    }
+}
+
+cartDisplay.addEventListener('click', () => {
+    if (cartFlyout.style.display === 'none' || cartFlyout.style.display === '') {
+        cartFlyout.style.display = 'flex';
+    } else {
+        cartFlyout.style.display = 'none';
+    }
+});
 
 document.querySelectorAll('.add-btn').forEach(button => {
     button.addEventListener('click', () => {
         const sku = button.getAttribute('data-sku');
-        cart.push(sku);
-        cartCountSpan.textContent = cart.length;
+        if (cart[sku]) {
+            cart[sku] = Math.min(cart[sku] + 1, 10);
+        } else {
+            cart[sku] = 1;
+        }
+        updateCartUI();
+        sendCartToChef();
         console.log(`Added to cart: ${sku}`);
+        
+        // Open cart panel automatically on first add
+        if (Object.keys(cart).length === 1 && cart[sku] === 1) {
+             cartFlyout.style.display = 'flex';
+        }
     });
 });
+
+// Initial UI sync
+updateCartUI();
+
+// Update socket.onopen to also send initial cart
+const originalOnOpen = socket.onopen;
+socket.onopen = () => {
+    if (originalOnOpen) originalOnOpen();
+    sendCartToChef();
+};

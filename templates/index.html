@@ -275,6 +275,40 @@
             max-height: 100%;
             object-fit: contain;
         }
+        /* Panels Container */
+        #panels-container {
+            position: fixed;
+            top: 60px;
+            bottom: 90px;
+            right: 20px;
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .panel {
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            pointer-events: auto;
+            flex: 1;
+        }
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .cart-item select {
+            padding: 5px;
+        }
     </style>
 </head>
 <body>
@@ -284,9 +318,27 @@
             <input type="text" placeholder="Search products...">
         </div>
         <div>
-            <span>My Account</span> | <span>$0.00</span> | <span id="cart-display">🛒 Cart (<span id="cart-count">0</span>)</span>
+            <span id="cart-display" style="cursor:pointer;">🛒 Cart (<span id="cart-count">0</span>)</span>
         </div>
     </header>
+    
+    <!-- Cart Side Panel -->
+    <div id="cart-panel" style="position:fixed; right:-350px; top:0; width:300px; height:100%; background:white; box-shadow:-2px 0 10px rgba(0,0,0,0.1); transition:right 0.3s ease; z-index:1001; padding:20px; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0;">My Basket</h3>
+            <button id="close-cart" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+        </div>
+        <div id="cart-items-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+            <!-- Cart items will be rendered here -->
+        </div>
+        <div style="border-top:1px solid #eee; padding-top:20px; margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:20px;">
+                <span>Total:</span>
+                <span id="cart-total">$0.00</span>
+            </div>
+            <button style="width:100%; background:#00875a; color:white; border:none; padding:15px; border-radius:4px; font-weight:bold; cursor:pointer;">Checkout</button>
+        </div>
+    </div>
     
     <div class="nav-bar">
         <a href="#">Browse products</a>
@@ -320,79 +372,93 @@
         <div class="text">Chef Help</div>
     </div>
     
-    <!-- Chat Flyout -->
-    <div id="chat-flyout">
-        <div id="chat-header">
-            <img src="/static/avatar.png" alt="Chef" style="display:none;">
-            <span>Virtual Chef</span>
-            <button id="settings-btn" title="Settings">⚙️</button>
+    <!-- Panels Container -->
+    <div id="panels-container">
+        <!-- Cart Flyout -->
+        <div id="cart-flyout" class="panel">
+            <div style="background-color: #00875a; color: white; padding: 15px; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <span>Shopping Cart</span>
+            </div>
+            <div id="cart-items-container" style="flex: 1; overflow-y: auto; padding: 15px;">
+                <!-- Cart items will appear here -->
+                <div class="cart-item">No items in cart</div>
+            </div>
         </div>
-        <div id="avatar-display">
-            <img id="avatar-frame" src="/static/avatar.png" alt="Avatar Frame">
-        </div>
-        <div id="chat-container">
-            <!-- Messages will appear here -->
-        </div>
-        <div id="settings-container">
-            <h3>Settings</h3>
-            <label>Access Token: <input type="password" id="access-token"></label>
-            <label>Project ID: <input type="text" id="project-id"></label>
-            <label>Location: <input type="text" id="location" value="us-central1"></label>
-            <label>Model ID: <input type="text" id="model-id" value="gemini-3.1-flash-live-preview"></label>
-            <label>Voice:
-                <select id="voice-select">
-                    <option value="Zephyr">Zephyr</option>
-                    <option value="Kore">Kore</option>
-                    <option value="Orus">Orus</option>
-                    <option value="Autonoe">Autonoe</option>
-                    <option value="Umbriel">Umbriel</option>
-                    <option value="Erinome">Erinome</option>
-                    <option value="Laomedeia">Laomedeia</option>
-                    <option value="Schedar">Schedar</option>
-                    <option value="Achird">Achird</option>
-                    <option value="Sadachbia">Sadachbia</option>
-                    <option value="Puck">Puck</option>
-                    <option value="Fenrir">Fenrir</option>
-                    <option value="Aoede">Aoede</option>
-                    <option value="Enceladus">Enceladus</option>
-                    <option value="Algieba">Algieba</option>
-                    <option value="Algenib">Algenib</option>
-                    <option value="Achernar">Achernar</option>
-                    <option value="Gacrux">Gacrux</option>
-                    <option value="Zubenelgenubi">Zubenelgenubi</option>
-                    <option value="Sadaltager">Sadaltager</option>
-                    <option value="Charon">Charon</option>
-                    <option value="Leda">Leda</option>
-                    <option value="Callirrhoe">Callirrhoe</option>
-                    <option value="Iapetus">Iapetus</option>
-                    <option value="Despina">Despina</option>
-                    <option value="Rasalgethi">Rasalgethi</option>
-                    <option value="Alnilam">Alnilam</option>
-                    <option value="Pulcherrima">Pulcherrima</option>
-                    <option value="Vindemiatrix">Vindemiatrix</option>
-                    <option value="Sulafat">Sulafat</option>
-                </select>
-            </label>
-            <label>Avatar:
-                <select id="avatar-select">
-                    <option value="Kira">Kira (Realistic)</option>
-                    <option value="Ingrid">Ingrid (Realistic)</option>
-                    <option value="Vera">Vera (Realistic)</option>
-                    <option value="Sam">Sam (Realistic)</option>
-                    <option value="Jay">Jay (Realistic)</option>
-                    <option value="Paul">Paul (Realistic)</option>
-                    <option value="Ben">Ben (Stylized)</option>
-                    <option value="Kai">Kai (Stylized)</option>
-                    <option value="Carmen">Carmen (Stylized)</option>
-                    <option value="Leo">Leo (Stylized)</option>
-                    <option value="Piper">Piper (Stylized)</option>
-                </select>
-            </label>
-            <button id="save-settings-btn">Save</button>
-        </div>
-        <div id="input-container">
-            <input type="text" id="user-input" placeholder="Ask the Chef...">
-            <button id="send-btn">Send</button>
+
+        <!-- Chat Flyout -->
+        <div id="chat-flyout" class="panel">
+            <div id="chat-header">
+                <img src="/static/avatar.png" alt="Chef" style="display:none;">
+                <span>Virtual Chef</span>
+                <button id="settings-btn" title="Settings">⚙️</button>
+            </div>
+            <div id="avatar-display">
+                <img id="avatar-frame" src="/static/avatar.png" alt="Avatar Frame">
+            </div>
+            <div id="chat-container">
+                <!-- Messages will appear here -->
+            </div>
+            <div id="settings-container">
+                <h3>Settings</h3>
+                <label>Access Token: <input type="password" id="access-token"></label>
+                <label>Project ID: <input type="text" id="project-id" value="cloud-llm-preview1"></label>
+                <label>Location: <input type="text" id="location" value="us-central1"></label>
+                <label>Model ID: <input type="text" id="model-id" value="gemini-3.1-flash-live-preview-04-2026"></label>
+                <label>Voice:
+                    <select id="voice-select">
+                        <option value="Zephyr">Zephyr</option>
+                        <option value="Kore">Kore</option>
+                        <option value="Orus">Orus</option>
+                        <option value="Autonoe">Autonoe</option>
+                        <option value="Umbriel">Umbriel</option>
+                        <option value="Erinome">Erinome</option>
+                        <option value="Laomedeia">Laomedeia</option>
+                        <option value="Schedar">Schedar</option>
+                        <option value="Achird">Achird</option>
+                        <option value="Sadachbia">Sadachbia</option>
+                        <option value="Puck">Puck</option>
+                        <option value="Fenrir">Fenrir</option>
+                        <option value="Aoede">Aoede</option>
+                        <option value="Enceladus">Enceladus</option>
+                        <option value="Algieba">Algieba</option>
+                        <option value="Algenib">Algenib</option>
+                        <option value="Achernar">Achernar</option>
+                        <option value="Gacrux">Gacrux</option>
+                        <option value="Zubenelgenubi">Zubenelgenubi</option>
+                        <option value="Sadaltager">Sadaltager</option>
+                        <option value="Charon">Charon</option>
+                        <option value="Leda">Leda</option>
+                        <option value="Callirrhoe">Callirrhoe</option>
+                        <option value="Iapetus">Iapetus</option>
+                        <option value="Despina">Despina</option>
+                        <option value="Rasalgethi">Rasalgethi</option>
+                        <option value="Alnilam">Alnilam</option>
+                        <option value="Pulcherrima">Pulcherrima</option>
+                        <option value="Vindemiatrix">Vindemiatrix</option>
+                        <option value="Sulafat">Sulafat</option>
+                    </select>
+                </label>
+                <label>Avatar:
+                    <select id="avatar-select">
+                        <option value="Kira">Kira (Realistic)</option>
+                        <option value="Ingrid">Ingrid (Realistic)</option>
+                        <option value="Vera">Vera (Realistic)</option>
+                        <option value="Sam">Sam (Realistic)</option>
+                        <option value="Jay">Jay (Realistic)</option>
+                        <option value="Paul">Paul (Realistic)</option>
+                        <option value="Ben">Ben (Stylized)</option>
+                        <option value="Kai">Kai (Stylized)</option>
+                        <option value="Carmen">Carmen (Stylized)</option>
+                        <option value="Leo">Leo (Stylized)</option>
+                        <option value="Piper">Piper (Stylized)</option>
+                    </select>
+                </label>
+                <button id="save-settings-btn">Save</button>
+            </div>
+            <div id="input-container">
+                <input type="text" id="user-input" placeholder="Ask the Chef...">
+                <button id="send-btn">Send</button>
+            </div>
         </div>
     </div>
 

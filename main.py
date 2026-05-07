@@ -8,25 +8,31 @@ import fastapi
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-static_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static"
-templates_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/templates"
-print(f"DEBUG: static_dir={static_dir}")
-print(f"DEBUG: templates_dir={templates_dir}")
+static_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/frontend/dist"
+assets_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/frontend/dist/assets"
 
 app = fastapi.FastAPI()
 
-# Serve static files
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Serve React assets
+app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+# Also keep old static for magic_icon.png if needed, or better move it to frontend/public
+# For now let's mount the old static as well
+app.mount("/static", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static"), name="static")
 
-# Setup templates
-templates = Jinja2Templates(directory=templates_dir)
+# Setup templates to point to React's dist
+templates = Jinja2Templates(directory=static_dir)
 
 from google3.labs.language.genai.agents.googlemart.mock_data import MOCK_CART, PRODUCTS, RECIPES
 from google3.labs.language.genai.agents.googlemart.sous_chefs import meal_planner, nutritionist, pantry_scout, sommelier
+from google3.labs.language.genai.agents.googlemart.orchestrator import CHEF_INSTRUCTION
 
 @app.get("/")
 async def read_root(request: fastapi.Request):
     return templates.TemplateResponse("index.html", {"request": request, "products": PRODUCTS})
+
+@app.get("/api/products")
+async def get_products():
+    return PRODUCTS
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: fastapi.WebSocket):
@@ -51,7 +57,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         token = config.get("accessToken")
         project = config.get("projectId")
         location = config.get("location", "us-central1")
-        model_id = config.get("modelId", "gemini-3.1-flash-live-preview")
+        model_id = config.get("modelId", "gemini-3.1-flash-live-preview-04-2026")
         voice = config.get("voice", "Puck")
         avatar = config.get("avatar", "Ben")
         
@@ -71,7 +77,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         model_path = f"projects/{project}/locations/{location}/publishers/google/models/{model_id}"
         setup_msg = {
             "setup": {
-                "systemInstruction": {"parts": [{"text": "You are a helpful AI assistant."}]},
+                "systemInstruction": {"parts": [{"text": CHEF_INSTRUCTION}]},
                 "model": model_path,
                 "generationConfig": {
                     "responseModalities": ["VIDEO"],
@@ -83,25 +89,118 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 },
                 "avatarConfig": {
                     "avatar_name": avatar
-                }
+                },
+                "tools": [
+                    { "googleSearch": {} },
+                    {
+                        "functionDeclarations": [
+                            {
+                                "name": "meal_planner",
+                                "description": "Identifies recipes based on basket contents.",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "cart_items": {"type": "ARRAY", "items": {"type": "STRING"}}
+                                    },
+                                    "required": ["cart_items"]
+                                }
+                            },
+                            {
+                                "name": "nutritionist",
+                                "description": "Provides macros and allergen alerts for a specific product.",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "product_sku": {"type": "STRING"}
+                                    },
+                                    "required": ["product_sku"]
+                                }
+                            },
+                            {
+                                "name": "pantry_scout",
+                                "description": "Analyzes the basket and identifies missing staples.",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "cart_items": {"type": "ARRAY", "items": {"type": "STRING"}}
+                                    },
+                                    "required": ["cart_items"]
+                                }
+                            },
+                            {
+                                "name": "sommelier",
+                                "description": "Handles flavor pairings (wines, sides).",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "product_sku": {"type": "STRING"}
+                                    },
+                                    "required": ["product_sku"]
+                                }
+                            },
+                            {
+                                "name": "suggest_product",
+                                "description": "Suggests a specific product to the user with an interactive button in the chat.",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "sku": {"type": "STRING", "description": "The SKU of the product to suggest."}
+                                    },
+                                    "required": ["sku"]
+                                }
+                            },
+                            {
+                                "name": "show_recipe",
+                                "description": "Displays a rich recipe card in a popup panel for the user.",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "name": {"type": "STRING", "description": "Name of the recipe."},
+                                        "ingredients": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "List of ingredient descriptions."},
+                                        "instructions": {"type": "STRING", "description": "Step by step instructions."},
+                                        "prep_time": {"type": "STRING", "description": "Estimated preparation time."}
+                                    },
+                                    "required": ["name", "ingredients", "instructions"]
+                                }
+                            }
+                        ]
+                    }
+                ]
             }
         }
         await gemini_ws.send(json.dumps(setup_msg))
         await gemini_ws.recv() # Wait for setup acknowledgment
-        
+
         # Send initial greeting to client
         await websocket.send_text(json.dumps({
             "type": "text",
-            "content": f"Connected to Gemini Live Avatar! I am using avatar {avatar} and voice {voice}."
+            "content": f"Connected to Gemini Live! I'm Chef, how can I help you today?"
         }))
-        
+
         # Start proxy loops
         async def client_to_gemini():
             try:
                 while True:
                     data = await websocket.receive_text()
                     msg = json.loads(data)
-                    if "content" in msg:
+
+                    if msg.get("type") == "cart_update":
+                        # Send a hidden context message to Gemini about the cart change
+                        cart_skus = msg.get("content", [])
+                        gemini_msg = {
+                            "clientContent": {
+                                "turns": [
+                                    {
+                                        "role": "user",
+                                        "parts": [{"text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {', '.join(cart_skus)}. Please acknowledge only if asked about the cart.]"}]
+                                    }
+                                ],
+                                "turnComplete": True
+                            }
+                        }
+                        await gemini_ws.send(json.dumps(gemini_msg))
+
+                    elif "content" in msg:
                         gemini_msg = {
                             "realtime_input": {
                                 "text": msg["content"]
@@ -112,12 +211,12 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 pass
             except Exception as e:
                 print(f"Error in client_to_gemini: {e}")
-                
+
         async def gemini_to_client():
             try:
                 async for message in gemini_ws:
                     response = json.loads(message)
-                    
+
                     parts = response.get("serverContent", {}).get("modelTurn", {}).get("parts", [])
                     for part in parts:
                         if "inlineData" in part:
@@ -126,17 +225,71 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 "type": "video",
                                 "content": part["inlineData"]["data"]
                             }))
-                            
+
                         if "text" in part:
                             await websocket.send_text(json.dumps({
                                 "type": "text",
                                 "content": part["text"]
                             }))
-                            
+
+                        if "functionCall" in part:
+                            fn_name = part["functionCall"]["name"]
+                            args = part["functionCall"].get("args", {})
+                            print(f"Tool call received: {fn_name} with {args}")
+
+                            result = {"status": "success"}
+
+                            if fn_name == "meal_planner":
+                                result = meal_planner(args.get("cart_items", []))
+                            elif fn_name == "nutritionist":
+                                result = nutritionist(args.get("product_sku", ""))
+                            elif fn_name == "pantry_scout":
+                                result = pantry_scout(args.get("cart_items", []))
+                            elif fn_name == "sommelier":
+                                result = sommelier(args.get("product_sku", ""))
+                            elif fn_name == "suggest_product":
+                                # Proxy to UI
+                                await websocket.send_text(json.dumps({
+                                    "type": "product_suggestion",
+                                    "content": args.get("sku")
+                                }))
+                            elif fn_name == "show_recipe":
+                                # Proxy to UI
+                                await websocket.send_text(json.dumps({
+                                    "type": "show_ui",
+                                    "component": "recipe_card",
+                                    "props": args
+                                }))
+
+                            print(f"Tool call result: {result}")
+
+                            call_id = part["functionCall"].get("id")
+                            func_resp_part = {
+                                "functionResponse": {
+                                    "name": fn_name,
+                                    "response": {"result": result}
+                                }
+                            }
+                            if call_id:
+                                func_resp_part["functionResponse"]["id"] = call_id
+
+                            tool_resp_msg = {
+                                "clientContent": {
+                                    "turns": [
+                                        {
+                                            "role": "user",
+                                            "parts": [
+                                                func_resp_part
+                                            ]
+                                        }
+                                    ],
+                                    "turnComplete": True
+                                }
+                            }
+                            await gemini_ws.send(json.dumps(tool_resp_msg))
+
             except Exception as e:
-                print(f"Error in gemini_to_client: {e}")
-                
-        # Run both loops concurrently
+                print(f"Error in gemini_to_client: {e}")        # Run both loops concurrently
         await asyncio.gather(client_to_gemini(), gemini_to_client())
         
     except Exception as e:
@@ -150,4 +303,4 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(app, host="0.0.0.0", port=8003)
