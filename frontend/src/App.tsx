@@ -1,18 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProductGrid from './components/ProductGrid';
 import CartPanel from './components/CartPanel';
 import ChefAssistant from './components/ChefAssistant';
 import { useCart } from './contexts/CartContext';
+import { useChef } from './contexts/ChefContext';
 import './App.css';
 
 const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const { cart, total } = useCart();
+  const { sendCartUpdate } = useChef();
+
+  useEffect(() => {
+    const skus = cart.map(item => item.sku);
+    sendCartUpdate(skus);
+  }, [cart, sendCartUpdate]);
 
   return (
     <div className="app">
       <header style={{
-        backgroundColor: 'white',
+        backgroundColor: '#e6f4ea',
         padding: '15px 20px',
         borderBottom: '1px solid #e0e0e0',
         display: 'flex',

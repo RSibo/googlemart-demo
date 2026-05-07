@@ -2,20 +2,9 @@
 
 from google3.labs.language.genai.agents.googlemart.mock_data import PRODUCTS, RECIPES
 
-def meal_planner(cart_items: list[str]) -> list[dict]:
-    """Identifies recipes based on basket contents."""
-    available_skus = set(cart_items)
-    matching_recipes = []
-    
-    for recipe in RECIPES:
-        recipe_skus = set(recipe["ingredients"])
-        # If we have all core ingredients, or at least most of them
-        # For simplicity, let's say we match if we have at least 3 ingredients
-        common = available_skus.intersection(recipe_skus)
-        if len(common) >= 3:
-            matching_recipes.append(recipe)
-            
-    return matching_recipes
+async def run_recipe_lookup(cart_items: list[str], model=None) -> str:
+    """Mock implementation of recipe lookup."""
+    return "Based on your cart, I suggest making a delicious Chicken Alfredo or a Fresh Salad."
 
 def nutritionist(product_sku: str) -> dict:
     """Provides macros and allergen alerts for a specific product."""

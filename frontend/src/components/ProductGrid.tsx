@@ -59,7 +59,7 @@ const ProductGrid: React.FC = () => {
         <button style={filterButtonStyle}>Allergens</button>
         <button style={filterButtonStyle}>Dietary and Lifestyle</button>
         <button style={filterButtonStyle}>Health Star Rating</button>
-        <button style={{ ...filterButtonStyle, marginLeft: 'auto' }}>🎛️ All filters</button>
+
       </div>
 
       <div style={{ color: '#666', marginBottom: '15px', fontSize: '14px' }}>
@@ -120,6 +120,9 @@ const ProductGrid: React.FC = () => {
                     src={product.image_url || `https://loremflickr.com/400/400/${product.image_keyword.replace(/,/g, ',')}/all?lock=${sku}`} 
                     alt={product.name} 
                     style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      e.currentTarget.src = `https://loremflickr.com/400/400/${product.image_keyword.replace(/,/g, ',')}/all?lock=${sku}`;
+                    }}
                   />
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>

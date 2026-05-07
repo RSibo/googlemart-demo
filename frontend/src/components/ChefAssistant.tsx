@@ -14,7 +14,7 @@ const VOICES = [
 const AVATARS = ["Kira", "Ingrid", "Vera", "Sam", "Jay", "Paul", "Ben", "Kai", "Carmen", "Leo", "Piper"];
 
 const ChefAssistant: React.FC = () => {
-  const { messages, sendMessage, avatarFrame, settings, updateSettings } = useChef();
+  const { messages, sendMessage, avatarFrame, settings, updateSettings, isConnected, isConnecting, connect, disconnect, isMuted, setIsMuted } = useChef();
   const { addToCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -97,6 +97,23 @@ const ChefAssistant: React.FC = () => {
           <div style={{ background: '#00875a', color: 'white', padding: '15px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span>Virtual Chef</span>
+              <button 
+                onClick={() => isConnected || isConnecting ? disconnect() : connect()} 
+                disabled={isConnecting}
+                style={{ 
+                  background: isConnecting ? '#888' : (isConnected ? '#d93025' : '#0084ff'), 
+                  color: 'white', 
+                  border: 'none', 
+                  padding: '4px 8px', 
+                  borderRadius: '4px', 
+                  cursor: isConnecting ? 'wait' : 'pointer', 
+                  fontSize: '12px', 
+                  fontWeight: 'bold',
+                  opacity: isConnecting ? 0.7 : 1
+                }}
+              >
+                {isConnecting ? 'Connecting...' : (isConnected ? 'Disconnect' : 'Connect')}
+              </button>
               <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
             </div>
             <button 
@@ -109,8 +126,44 @@ const ChefAssistant: React.FC = () => {
 
           {!isSettingsOpen ? (
             <>
-              <div style={{ width: '100%', height: '150px', background: '#eee', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #e0e0e0' }}>
+              <div style={{ position: 'relative', width: '100%', height: '150px', background: '#eee', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #e0e0e0' }}>
                 <img src={avatarFrame || "/avatar.png"} alt="Avatar" style={{ maxHeight: '100%' }} />
+                {isConnected && (
+                  <button 
+                    onClick={() => setIsMuted(!isMuted)} 
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      right: '10px',
+                      background: 'rgba(0,0,0,0.5)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '16px'
+                    }}
+                    title={isMuted ? "Unmute Avatar" : "Mute Avatar"}
+                  >
+                    {isMuted ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                      </svg>
+                    )}
+                  </button>
+                )}
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {messages.map(msg => (

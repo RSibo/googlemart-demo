@@ -4,12 +4,19 @@ import type { ChefSettings, ChatMessage } from '../types';
 interface ChefContextType {
   messages: ChatMessage[];
   sendMessage: (text: string) => void;
+  sendCartUpdate: (skus: string[]) => void;
   settings: ChefSettings;
   updateSettings: (settings: ChefSettings) => void;
   avatarFrame: string | null;
   isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
   visibleProducts: string[];
   setVisibleProducts: React.Dispatch<React.SetStateAction<string[]>>;
+  connect: () => void;
+  disconnect: () => void;
+  isMuted: boolean;
+  setIsMuted: (muted: boolean) => void;
 }
 
 const ChefContext = createContext<ChefContextType | undefined>(undefined);
@@ -28,11 +35,26 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [settings, setSettings] = useState<ChefSettings>(DEFAULT_SETTINGS);
   const [avatarFrame, setAvatarFrame] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [visibleProducts, setVisibleProducts] = useState<string[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    setIsConnected(false);
+    setIsConnecting(false);
+    setAvatarFrame(null);
+  }, []);
+
   const connect = useCallback(() => {
-    if (socketRef.current) socketRef.current.close();
+    disconnect();
+    setIsConnecting(true);
+    setError(null);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -41,6 +63,7 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.onopen = () => {
       console.log('Connected to WebSocket');
       setIsConnected(true);
+      setIsConnecting(false);
       socket.send(JSON.stringify({
         type: 'setup',
         content: settings
@@ -69,26 +92,37 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAvatarFrame(`data:image/jpeg;base64,${data.content}`);
       } else if (data.type === 'error') {
         console.error('Gemini Error:', data.content);
+        setError(data.content);
+        setIsConnecting(false);
       }
     };
 
     socket.onclose = () => {
       setIsConnected(false);
+      setIsConnecting(false);
       console.log('WebSocket closed');
     };
 
     socketRef.current = socket;
-  }, [settings]);
+  }, [settings, disconnect]);
 
   useEffect(() => {
-    connect();
-    return () => socketRef.current?.close();
-  }, [connect]);
+    return () => disconnect();
+  }, [disconnect]);
 
   const sendMessage = (content: string) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       setMessages(prev => [...prev, { role: 'user', content, id: Date.now().toString() }]);
       socketRef.current.send(JSON.stringify({ content }));
+    }
+  };
+
+  const sendCartUpdate = (skus: string[]) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'cart_update',
+        content: skus
+      }));
     }
   };
 
@@ -109,8 +143,9 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <ChefContext.Provider value={{ 
-      messages, sendMessage, settings, updateSettings, 
-      avatarFrame, isConnected, visibleProducts, setVisibleProducts 
+      messages, sendMessage, sendCartUpdate, settings, updateSettings, 
+      avatarFrame, isConnected, isConnecting, error, visibleProducts, setVisibleProducts,
+      connect, disconnect, isMuted, setIsMuted
     }}>
       {children}
     </ChefContext.Provider>

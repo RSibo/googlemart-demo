@@ -23,8 +23,27 @@ app.mount("/static", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-v
 templates = Jinja2Templates(directory=static_dir)
 
 from google3.labs.language.genai.agents.googlemart.mock_data import MOCK_CART, PRODUCTS, RECIPES
-from google3.labs.language.genai.agents.googlemart.sous_chefs import meal_planner, nutritionist, pantry_scout, sommelier
-from google3.labs.language.genai.agents.googlemart.orchestrator import CHEF_INSTRUCTION
+from google3.labs.language.genai.agents.googlemart.sous_chefs import (
+    run_recipe_lookup, nutritionist, pantry_scout, sommelier
+)
+
+CHEF_INSTRUCTION = """
+You are the Executive Chef of GoogleMart, a grocery chain in Australia.
+You maintain a warm, professional, and helpful chef persona.
+You help users with:
+1. Basket Transformation: Suggesting recipes based on cart contents.
+2. Healthy Filter: Providing nutritional information and health tips.
+3. Complete the Meal: Suggesting pairings and upsells.
+
+Use your Sous-Chefs (sub-agents and tools) to gather information:
+- `recipe_lookup_agent`: Finds recipes based on cart items using Google Search.
+- `nutritionist`: Provides macros and allergen info for a product.
+- `pantry_scout`: Checks for staples based on cart items.
+- `sommelier`: Suggests pairings for a product.
+
+Always respond in character as a friendly and expert chef.
+"""
+
 
 @app.get("/")
 async def read_root(request: fastapi.Request):
@@ -61,6 +80,8 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         voice = config.get("voice", "Puck")
         avatar = config.get("avatar", "Ben")
         
+
+        
         # Construct URI
         host = f"{location}-autopush-aiplatform.sandbox.googleapis.com"
         uri = f"wss://{host}/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
@@ -95,8 +116,8 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     {
                         "functionDeclarations": [
                             {
-                                "name": "meal_planner",
-                                "description": "Identifies recipes based on basket contents.",
+                                "name": "recipe_lookup_agent",
+                                "description": "Searches for recipes based on cart items using Google Search.",
                                 "parameters": {
                                     "type": "OBJECT",
                                     "properties": {
@@ -171,11 +192,19 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         await gemini_ws.send(json.dumps(setup_msg))
         await gemini_ws.recv() # Wait for setup acknowledgment
 
-        # Send initial greeting to client
-        await websocket.send_text(json.dumps({
-            "type": "text",
-            "content": f"Connected to Gemini Live! I'm Chef, how can I help you today?"
-        }))
+        # Send initial greeting prompt to Gemini to kick off the conversation
+        greeting_msg = {
+            "clientContent": {
+                "turns": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": "Hello, I have just connected. Please introduce yourself warmly as the Virtual Chef and ask how you can help me today."}]
+                    }
+                ],
+                "turnComplete": True
+            }
+        }
+        await gemini_ws.send(json.dumps(greeting_msg))
 
         # Start proxy loops
         async def client_to_gemini():
@@ -187,12 +216,15 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     if msg.get("type") == "cart_update":
                         # Send a hidden context message to Gemini about the cart change
                         cart_skus = msg.get("content", [])
+                        cart_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in cart_skus if sku in PRODUCTS]
+                        cart_text = ", ".join(cart_details) if cart_details else "Empty"
+                        
                         gemini_msg = {
                             "clientContent": {
                                 "turns": [
                                     {
                                         "role": "user",
-                                        "parts": [{"text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {', '.join(cart_skus)}. Please acknowledge only if asked about the cart.]"}]
+                                        "parts": [{"text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {cart_text}. Please use this information if the user asks about their cart.]"}]
                                     }
                                 ],
                                 "turnComplete": True
@@ -200,7 +232,33 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                         }
                         await gemini_ws.send(json.dumps(gemini_msg))
 
-                    elif "content" in msg:
+                    elif msg.get("type") == "context_update":
+                        # Send a hidden context message to Gemini about the visible screen
+                        visible_skus_str = msg.get("content", "")
+                        # Frontend sends "User is currently viewing: SKU_..., SKU_..."
+                        skus = []
+                        if ":" in visible_skus_str:
+                            skus_part = visible_skus_str.split(":", 1)[1]
+                            skus = [s.strip() for s in skus_part.split(",")]
+                        
+                        visible_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in skus if sku in PRODUCTS]
+                        visible_text = ", ".join(visible_details) if visible_details else "Nothing specific"
+                        
+                        gemini_msg = {
+                            "clientContent": {
+                                "turns": [
+                                    {
+                                        "role": "user",
+                                        "parts": [{"text": f"[CONTEXT: The user is currently viewing these products on their screen: {visible_text}. Please use this information if the user asks about what they are looking at or what is on the screen.]"}]
+                                    }
+                                ],
+                                "turnComplete": True
+                            }
+                        }
+                        await gemini_ws.send(json.dumps(gemini_msg))
+
+                    elif "content" in msg and not msg.get("type"):
+                        # Only send content as realtime input if it's explicitly meant to be speech/text input (no type specified, or handled as user text)
                         gemini_msg = {
                             "realtime_input": {
                                 "text": msg["content"]
@@ -239,8 +297,8 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
 
                             result = {"status": "success"}
 
-                            if fn_name == "meal_planner":
-                                result = meal_planner(args.get("cart_items", []))
+                            if fn_name == "recipe_lookup_agent":
+                                result = await run_recipe_lookup(args.get("cart_items", []), None)
                             elif fn_name == "nutritionist":
                                 result = nutritionist(args.get("product_sku", ""))
                             elif fn_name == "pantry_scout":
@@ -297,10 +355,11 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
             "type": "error",
             "content": f"Connection error: {str(e)}"
         }))
+        await websocket.close()
     finally:
         if gemini_ws:
             await gemini_ws.close()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=8004)

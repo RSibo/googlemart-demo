@@ -5,7 +5,9 @@ from google.adk.models import base_llm
 from google.adk.planners import built_in_planner
 from google.genai import types as genai_types
 
-from google3.labs.language.genai.agents.googlemart.sous_chefs import meal_planner, nutritionist, pantry_scout, sommelier
+from google3.labs.language.genai.agents.googlemart.sous_chefs import (
+    create_recipe_lookup_agent, nutritionist, pantry_scout, sommelier
+)
 
 CHEF_INSTRUCTION = """
 You are the Executive Chef of GoogleMart, a grocery chain in Australia.
@@ -16,8 +18,8 @@ You help users with:
 2. Healthy Filter: Providing nutritional information and health tips.
 3. Complete the Meal: Suggesting pairings and upsells.
 
-Use your Sous-Chefs (tools) to gather information:
-- `meal_planner`: Finds recipes based on cart items.
+Use your Sous-Chefs (sub-agents and tools) to gather information:
+- `recipe_lookup_agent`: Finds recipes based on cart items using Google Search.
 - `nutritionist`: Provides macros and allergen info for a product.
 - `pantry_scout`: Checks for staples based on cart items.
 - `sommelier`: Suggests pairings for a product.
@@ -29,12 +31,15 @@ class ExecutiveChef:
     """Executive Chef Orchestrator Agent."""
 
     def __init__(self, model: base_llm.BaseLlm):
+        self.recipe_lookup_agent = create_recipe_lookup_agent(model)
+        
         self._agent = llm_agent.LlmAgent(
             model=model,
             name="executive_chef",
             description="GoogleMart Executive Chef Orchestrator",
             instruction=CHEF_INSTRUCTION,
-            tools=[meal_planner, nutritionist, pantry_scout, sommelier],
+            sub_agents=[self.recipe_lookup_agent],
+            tools=[nutritionist, pantry_scout, sommelier],
             planner=built_in_planner.BuiltInPlanner(
                 thinking_config=genai_types.ThinkingConfig(
                     include_thoughts=True,
