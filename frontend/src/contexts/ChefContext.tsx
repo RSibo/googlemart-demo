@@ -21,11 +21,19 @@ interface ChefContextType {
 
 const ChefContext = createContext<ChefContextType | undefined>(undefined);
 
+const getInitialModelId = () => {
+  const stored = localStorage.getItem('modelId');
+  if (!stored || stored === 'gemini_live_rev25_ava') {
+    return 'gemini-3.1-flash-live-preview-04-2026';
+  }
+  return stored;
+};
+
 const DEFAULT_SETTINGS: ChefSettings = {
   accessToken: localStorage.getItem('accessToken') || '',
   projectId: localStorage.getItem('projectId') || 'cloud-llm-preview1',
   location: localStorage.getItem('location') || 'us-central1',
-  modelId: localStorage.getItem('modelId') || 'gemini-3.1-flash-live-preview-04-2026',
+  modelId: getInitialModelId(),
   voice: localStorage.getItem('voice') || 'Puck',
   avatar: localStorage.getItem('avatar') || 'Ben'
 };
@@ -110,26 +118,26 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => disconnect();
   }, [disconnect]);
 
-  const sendMessage = (content: string) => {
+  const sendMessage = useCallback((content: string) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       setMessages(prev => [...prev, { role: 'user', content, id: Date.now().toString() }]);
       socketRef.current.send(JSON.stringify({ content }));
     }
-  };
+  }, []);
 
-  const sendCartUpdate = (skus: string[]) => {
+  const sendCartUpdate = useCallback((skus: string[]) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({
         type: 'cart_update',
         content: skus
       }));
     }
-  };
+  }, []);
 
-  const updateSettings = (newSettings: ChefSettings) => {
+  const updateSettings = useCallback((newSettings: ChefSettings) => {
     setSettings(newSettings);
     Object.entries(newSettings).forEach(([key, value]) => localStorage.setItem(key, value));
-  };
+  }, []);
 
   // Sync visible products context
   useEffect(() => {

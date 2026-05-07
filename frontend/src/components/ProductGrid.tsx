@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { Product } from '../types';
 import { useCart } from '../contexts/CartContext';
 import { useChef } from '../contexts/ChefContext';
@@ -26,13 +26,13 @@ const ProductGrid: React.FC = () => {
       .then(data => setProducts(data));
   }, []);
 
-  const handleVisible = (sku: string) => {
+  const handleVisible = useCallback((sku: string) => {
     setVisibleProducts((prev: string[]) => Array.from(new Set([...prev, sku])));
-  };
+  }, [setVisibleProducts]);
 
-  const handleHidden = (sku: string) => {
+  const handleHidden = useCallback((sku: string) => {
     setVisibleProducts((prev: string[]) => prev.filter((s: string) => s !== sku));
-  };
+  }, [setVisibleProducts]);
 
   const handleAddToCart = (product: Product, sku: string) => {
     addToCart({ ...product, sku });
@@ -85,7 +85,7 @@ const ProductGrid: React.FC = () => {
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-start',
               height: '100%',
               position: 'relative'
             }}>

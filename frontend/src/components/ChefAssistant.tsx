@@ -14,19 +14,46 @@ const VOICES = [
 const AVATARS = ["Kira", "Ingrid", "Vera", "Sam", "Jay", "Paul", "Ben", "Kai", "Carmen", "Leo", "Piper"];
 
 const ChefAssistant: React.FC = () => {
-  const { messages, sendMessage, avatarFrame, settings, updateSettings, isConnected, isConnecting, connect, disconnect, isMuted, setIsMuted } = useChef();
+  const { messages, sendMessage, avatarFrame, settings, updateSettings, isConnected, isConnecting, error, connect, disconnect, isMuted, setIsMuted } = useChef();
   const { addToCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [activeRecipe, setActiveRecipe] = useState<any>(null);
   const [products, setProducts] = useState<Record<string, Product>>({});
+  const [position, setPosition] = useState({ x: window.innerWidth - 370, y: window.innerHeight - 520 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [rel, setRel] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     fetch('/api/products')
       .then(res => res.json())
       .then(data => setProducts(data));
   }, []);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      setPosition({
+        x: e.clientX - rel.x,
+        y: e.clientY - rel.y
+      });
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isDragging, rel]);
 
   const handleSend = () => {
     if (input.trim()) {
@@ -82,8 +109,8 @@ const ChefAssistant: React.FC = () => {
       {isOpen && (
         <div style={{
           position: 'fixed',
-          bottom: '20px',
-          right: '20px',
+          top: `${position.y}px`,
+          left: `${position.x}px`,
           width: '350px',
           height: '500px',
           backgroundColor: 'white',
@@ -92,9 +119,28 @@ const ChefAssistant: React.FC = () => {
           boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 1000
+          zIndex: 1002
         }}>
-          <div style={{ background: '#00875a', color: 'white', padding: '15px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div 
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              setIsDragging(true);
+              setRel({
+                x: e.clientX - position.x,
+                y: e.clientY - position.y
+              });
+            }}
+            style={{ 
+              background: '#00875a', 
+              color: 'white', 
+              padding: '15px', 
+              borderRadius: '12px 12px 0 0', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              cursor: 'move'
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span>Virtual Chef</span>
               <button 
@@ -114,10 +160,18 @@ const ChefAssistant: React.FC = () => {
               >
                 {isConnecting ? 'Connecting...' : (isConnected ? 'Disconnect' : 'Connect')}
               </button>
-              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>⚙️</button>
+              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '4px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
             </div>
             <button 
-              onClick={() => setIsOpen(false)} 
+              onClick={() => {
+                setIsOpen(false);
+                setPosition({ x: window.innerWidth - 370, y: window.innerHeight - 520 });
+              }} 
               style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold' }}
             >
               &times;
@@ -166,6 +220,19 @@ const ChefAssistant: React.FC = () => {
                 )}
               </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {error && (
+                  <div style={{
+                    backgroundColor: '#ffebee',
+                    color: '#d32f2f',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    border: '1px solid #ffcdd2',
+                    marginBottom: '10px'
+                  }}>
+                    <strong>Connection Error:</strong> {error}
+                  </div>
+                )}
                 {messages.map(msg => (
                   <div key={msg.id} style={{
                     alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',

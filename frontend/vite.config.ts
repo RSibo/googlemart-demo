@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8004',
+        target: 'http://localhost:8006',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8004',
+        target: 'ws://localhost:8006',
         ws: true,
       },
     },

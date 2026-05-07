@@ -7,15 +7,15 @@ interface CartPanelProps {
 }
 
 const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose }) => {
-  const { cart, removeFromCart, total } = useCart();
+  const { cart, updateQuantity, total } = useCart();
 
   return (
     <div style={{
       position: 'fixed',
       right: isOpen ? '0' : '-350px',
-      top: 0,
+      top: '70px',
+      bottom: '90px',
       width: '300px',
-      height: '100%',
       background: 'white',
       boxShadow: '-2px 0 10px rgba(0,0,0,0.1)',
       transition: 'right 0.3s ease',
@@ -39,18 +39,29 @@ const CartPanel: React.FC<CartPanelProps> = ({ isOpen, onClose }) => {
             border: '1px solid #eee',
             borderRadius: '4px'
           }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, paddingRight: '10px' }}>
               <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.name}</div>
               <div style={{ fontSize: '12px', color: '#666' }}>
-                ${item.price.toFixed(2)} {item.quantity > 1 ? `x ${item.quantity}` : ''}
+                ${item.price.toFixed(2)}
               </div>
             </div>
-            <button 
-              onClick={() => removeFromCart(item.sku)}
-              style={{ background: 'none', border: 'none', color: '#ff4d4f', cursor: 'pointer', fontSize: '18px' }}
+            <select
+              value={item.quantity}
+              onChange={(e) => updateQuantity(item.sku, parseInt(e.target.value, 10))}
+              style={{
+                padding: '2px 4px',
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                background: '#f9f9f9',
+                cursor: 'pointer',
+                fontSize: '12px',
+                outline: 'none'
+              }}
             >
-              &times;
-            </button>
+              {[...Array(11).keys()].map(num => (
+                <option key={num} value={num}>{num === 0 ? '0 (Remove)' : num}</option>
+              ))}
+            </select>
           </div>
         ))}
       </div>
