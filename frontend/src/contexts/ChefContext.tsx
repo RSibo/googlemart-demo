@@ -21,19 +21,11 @@ interface ChefContextType {
 
 const ChefContext = createContext<ChefContextType | undefined>(undefined);
 
-const getInitialModelId = () => {
-  const stored = localStorage.getItem('modelId');
-  if (!stored || stored === 'gemini_live_rev25_ava') {
-    return 'gemini-3.1-flash-live-preview-04-2026';
-  }
-  return stored;
-};
-
 const DEFAULT_SETTINGS: ChefSettings = {
   accessToken: localStorage.getItem('accessToken') || '',
   projectId: localStorage.getItem('projectId') || 'cloud-llm-preview1',
   location: localStorage.getItem('location') || 'us-central1',
-  modelId: getInitialModelId(),
+  modelId: localStorage.getItem('modelId') || 'gemini-3.1-flash-live-preview-04-2026',
   voice: localStorage.getItem('voice') || 'Puck',
   avatar: localStorage.getItem('avatar') || 'Ben'
 };
@@ -105,10 +97,13 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       setIsConnected(false);
       setIsConnecting(false);
-      console.log('WebSocket closed');
+      console.log('WebSocket closed', event);
+      if (!event.wasClean) {
+        setError(`Connection lost: ${event.reason || 'Unknown reason'} (Code: ${event.code})`);
+      }
     };
 
     socketRef.current = socket;

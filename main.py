@@ -7,26 +7,39 @@ import websockets
 import fastapi
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import traceback
 
-static_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/frontend/dist"
-assets_dir = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/frontend/dist/assets"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = "labs/language/genai/agents/googlemart/frontend/dist"
+assets_dir = "labs/language/genai/agents/googlemart/frontend/dist/assets"
 
+print(f"DEBUG: current_dir={current_dir}")
+print(f"DEBUG: static_dir={static_dir}, exists={os.path.exists(static_dir)}")
+print(f"DEBUG: assets_dir={assets_dir}, exists={os.path.exists(assets_dir)}")
+try:
+    print(f"DEBUG: files in assets_dir={os.listdir(assets_dir)}")
+except Exception as e:
+    print(f"DEBUG: failed to list assets_dir: {e}")
+print(f"DEBUG: cwd={os.getcwd()}")
 app = fastapi.FastAPI()
 
 # Serve React assets
-app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+app.mount("/assets", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static/assets"), name="assets")
 # Also keep old static for magic_icon.png if needed, or better move it to frontend/public
 # For now let's mount the old static as well
 app.mount("/static", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static"), name="static")
 
 # Setup templates to point to React's dist
-templates = Jinja2Templates(directory=static_dir)
+templates = Jinja2Templates(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/templates")
 
 from google3.labs.language.genai.agents.googlemart.mock_data import MOCK_CART, PRODUCTS, RECIPES
 from google3.labs.language.genai.agents.googlemart.sous_chefs import (
     run_recipe_lookup, nutritionist, pantry_scout, sommelier
 )
+from google3.labs.language.genai.agents.googlemart.orchestrator import ExecutiveChef
+from google3.learning.agents.orcas.framework.runners.secure_runner import InMemorySecureRunner
 
+from google.genai import types as adk_types
 CHEF_INSTRUCTION = """
 You are the Executive Chef of GoogleMart, a grocery chain in Australia.
 You maintain a warm, professional, and helpful chef persona.
@@ -73,19 +86,71 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
             return
             
         config = message.get("content", {})
-        token = config.get("accessToken")
-        project = config.get("projectId")
-        location = config.get("location", "us-central1")
-        model_id = config.get("modelId", "gemini-3.1-flash-live-preview-04-2026")
-        voice = config.get("voice", "Puck")
-        avatar = config.get("avatar", "Ben")
+        token = config.get("accessToken", "").strip().strip('"').strip("'")
+        project = config.get("projectId") or "cloud-llm-preview1"
+        location = config.get("location") or "us-central1"
+        model_id = config.get("modelId") or "gemini-3.1-flash-live-preview-04-2026"
+        if model_id == "gemini_live_rev25_ava":
+            model_id = "gemini-3.1-flash-live-preview-04-2026"
+        voice = config.get("voice") or "Puck"
+        avatar = config.get("avatar") or "Ben"
+        from google.adk.models.google_llm import Gemini
+        from google.genai import Client
+        from google.genai import types
+        
+        from google.auth.credentials import Credentials
+        
+        class SimpleTokenCredentials(Credentials):
+            def __init__(self, token):
+                super().__init__()
+                self.token = token
+                
+            def apply(self, headers, token_type='Bearer'):
+                headers['Authorization'] = f'{token_type} {self.token}'
+                
+            def before_request(self, request, method, url, headers):
+                self.apply(headers)
+                
+            def refresh(self, request):
+                pass
 
+        from functools import cached_property
+        class TokenGemini(Gemini):
+            @cached_property
+            def api_client(self) -> Client:
+                headers = self._tracking_headers()
+                
+                kwargs = {
+                    'http_options': types.HttpOptions(headers=headers),
+                    'vertexai': True,
+                    'project': project,
+                    'location': location,
+                    'credentials': SimpleTokenCredentials(token)
+                }
+                return Client(**kwargs)
+                
+        adk_model = TokenGemini(model="gemini-2.5-flash")
+        chef = ExecutiveChef(model=adk_model)
+        chef_agent = chef.get_agent()
+
+        from google3.learning.agents.orcas.framework.runners.secure_runner import SecureRunner
+        from google.adk.sessions.in_memory_session_service import InMemorySessionService
+        from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
+        from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+        
+        session_service = InMemorySessionService()
+        
+        runner = SecureRunner(
+            agent=chef_agent,
+            app_name="chef_app",
+            session_service=session_service,
+            artifact_service=InMemoryArtifactService(),
+            memory_service=InMemoryMemoryService(),
+            auto_create_session=True
+        )
         # Construct URI
-        if location == "global":
-            host = "autopush-aiplatform.sandbox.googleapis.com"
-        else:
-            host = f"{location}-aiplatform.googleapis.com"
-        uri = f"wss://{host}/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent"
+        host = f"{location}-autopush-aiplatform.sandbox.googleapis.com"
+        uri = f"wss://{host}/ws/google.cloud.aiplatform.v1.LlmBidiService/BidiGenerateContent"
 
         headers = {
             "Authorization": f"Bearer {token}",
@@ -108,7 +173,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 "systemInstruction": {"parts": [{"text": CHEF_INSTRUCTION}]},
                 "model": model_path,
                 "generationConfig": {
-                    "responseModalities": ["VIDEO"],
+                    "responseModalities": ["AUDIO", "VIDEO"],
                     "speechConfig": {
                         "voiceConfig": {
                             "prebuiltVoiceConfig": {"voiceName": voice}
@@ -117,7 +182,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     }
                 },
                 "avatarConfig": {
-                    "avatarName": avatar
+                    "avatar_name": avatar
                 },
                 "tools": [
                     { "googleSearch": {} },
@@ -204,7 +269,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
 
         # Send initial greeting prompt to Gemini to kick off the conversation
         greeting_msg = {
-            "realtimeInput": {
+            "realtime_input": {
                 "text": "Hello, I have just connected. Please introduce yourself warmly as the Virtual Chef and ask how you can help me today."
             }
         }
@@ -225,7 +290,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                         cart_text = ", ".join(cart_details) if cart_details else "Empty"
                         
                         gemini_msg = {
-                            "realtimeInput": {
+                            "realtime_input": {
                                 "text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {cart_text}. Please use this information if the user asks about their cart.]"
                             }
                         }
@@ -244,24 +309,63 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                         visible_text = ", ".join(visible_details) if visible_details else "Nothing specific"
                         
                         gemini_msg = {
-                            "realtimeInput": {
+                            "realtime_input": {
                                 "text": f"[CONTEXT: The user is currently viewing these products on their screen: {visible_text}. Please use this information if the user asks about what they are looking at or what is on the screen.]"
                             }
                         }
                         await gemini_ws.send(json.dumps(gemini_msg))
 
                     elif "content" in msg and not msg.get("type"):
-                        # Only send content as realtime input if it's explicitly meant to be speech/text input (no type specified, or handled as user text)
-                        gemini_msg = {
-                            "realtimeInput": {
-                                "text": msg["content"]
+                        user_msg = msg["content"]
+                        response_text = ""
+                        try:
+                            async for event in runner.run_async(
+                                user_id="chef_user", session_id="session_1",
+                                new_message=adk_types.Content(role="user", parts=[adk_types.Part.from_text(text=user_msg)]),
+                            ):
+                                if event.is_final_response() and event.content.parts:
+                                    response_text = event.content.parts[0].text
+                            
+                            print(f"DEBUG: ADK Agent response: {response_text}")
+                            
+                            # Send response to Gemini Live to speak it
+                            gemini_msg = {
+                                "clientContent": {
+                                    "turns": [
+                                        {
+                                            "role": "user",
+                                            "parts": [{"text": response_text}]
+                                        }
+                                    ],
+                                    "turnComplete": True
+                                }
                             }
-                        }
-                        await gemini_ws.send(json.dumps(gemini_msg))
+                            await gemini_ws.send(json.dumps(gemini_msg))
+                            
+                            # Also send text response to client UI so they see it!
+                            await websocket.send_text(json.dumps({
+                                "type": "text",
+                                "content": response_text
+                            }))
+                            
+                        except Exception as e:
+                            tb = traceback.format_exc()
+                            print(f"Error running ADK agent:\n{tb}")
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "content": f"Error running ADK agent: {str(e)}\n{tb}"
+                            }))
             except fastapi.WebSocketDisconnect:
                 pass
             except Exception as e:
                 print(f"Error in client_to_gemini: {e}")
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": f"Error in client_to_gemini: {str(e)}"
+                    }))
+                except:
+                    pass
 
         async def gemini_to_client():
             try:
@@ -271,11 +375,19 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     parts = response.get("serverContent", {}).get("modelTurn", {}).get("parts", [])
                     for part in parts:
                         if "inlineData" in part:
-                            # Send video frame to client
-                            await websocket.send_text(json.dumps({
-                                "type": "video",
-                                "content": part["inlineData"]["data"]
-                            }))
+                            mime_type = part["inlineData"].get("mimeType", "")
+                            data = part["inlineData"]["data"]
+                            
+                            if "image" in mime_type or not mime_type: # Fallback to video if no mimeType as before
+                                await websocket.send_text(json.dumps({
+                                    "type": "video",
+                                    "content": data
+                                }))
+                            elif "audio" in mime_type:
+                                await websocket.send_text(json.dumps({
+                                    "type": "audio",
+                                    "content": data
+                                }))
 
                         if "text" in part:
                             await websocket.send_text(json.dumps({
@@ -340,7 +452,14 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                             await gemini_ws.send(json.dumps(tool_resp_msg))
 
             except Exception as e:
-                print(f"Error in gemini_to_client: {e}")        # Run both loops concurrently
+                print(f"Error in gemini_to_client: {e}")
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": f"Error in gemini_to_client: {str(e)}"
+                    }))
+                except:
+                    pass        # Run both loops concurrently
         await asyncio.gather(client_to_gemini(), gemini_to_client())
         
     except Exception as e:
@@ -354,5 +473,12 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
             await gemini_ws.close()
 app.mount("/", StaticFiles(directory=static_dir), name="root_static")
 if __name__ == "__main__":
+    from absl import flags
+    import sys
+    try:
+        flags.FLAGS(sys.argv)
+    except flags.UnrecognizedFlagError:
+        flags.FLAGS(['main.py'])
+    
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8009)

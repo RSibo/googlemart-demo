@@ -2,7 +2,7 @@
 
 from google3.labs.language.genai.agents.googlemart.mock_data import PRODUCTS, RECIPES
 
-async def run_recipe_lookup(cart_items: list[str], model=None) -> str:
+async def run_recipe_lookup(cart_items: list[str]) -> str:
     """Mock implementation of recipe lookup."""
     return "Based on your cart, I suggest making a delicious Chicken Alfredo or a Fresh Salad."
 

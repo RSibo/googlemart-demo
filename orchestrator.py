@@ -6,7 +6,7 @@ from google.adk.planners import built_in_planner
 from google.genai import types as genai_types
 
 from google3.labs.language.genai.agents.googlemart.sous_chefs import (
-    create_recipe_lookup_agent, nutritionist, pantry_scout, sommelier
+    run_recipe_lookup, nutritionist, pantry_scout, sommelier
 )
 
 CHEF_INSTRUCTION = """
@@ -31,15 +31,13 @@ class ExecutiveChef:
     """Executive Chef Orchestrator Agent."""
 
     def __init__(self, model: base_llm.BaseLlm):
-        self.recipe_lookup_agent = create_recipe_lookup_agent(model)
-        
         self._agent = llm_agent.LlmAgent(
             model=model,
             name="executive_chef",
             description="GoogleMart Executive Chef Orchestrator",
             instruction=CHEF_INSTRUCTION,
-            sub_agents=[self.recipe_lookup_agent],
-            tools=[nutritionist, pantry_scout, sommelier],
+            sub_agents=[],
+            tools=[nutritionist, pantry_scout, sommelier, run_recipe_lookup],
             planner=built_in_planner.BuiltInPlanner(
                 thinking_config=genai_types.ThinkingConfig(
                     include_thoughts=True,
