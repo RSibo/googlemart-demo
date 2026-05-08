@@ -90,8 +90,8 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         project = config.get("projectId") or "cloud-llm-preview1"
         location = config.get("location") or "us-central1"
         model_id = config.get("modelId") or "gemini-3.1-flash-live-preview-04-2026"
-        if model_id == "gemini_live_rev25_ava":
-            model_id = "gemini-3.1-flash-live-preview-04-2026"
+        # Force the live model to the one that supports both audio and video
+        live_model_id = "gemini-3.1-flash-live-preview-04-2026"
         voice = config.get("voice") or "Puck"
         avatar = config.get("avatar") or "Ben"
         from google.adk.models.google_llm import Gemini
@@ -167,13 +167,13 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         print("DEBUG: Connected to Gemini API successfully")
 
         # Send setup message to Gemini
-        model_path = f"projects/{project}/locations/{location}/publishers/google/models/{model_id}"
+        model_path = f"projects/{project}/locations/{location}/publishers/google/models/{live_model_id}"
         setup_msg = {
             "setup": {
                 "systemInstruction": {"parts": [{"text": CHEF_INSTRUCTION}]},
                 "model": model_path,
                 "generationConfig": {
-                    "responseModalities": ["AUDIO", "VIDEO"],
+                    "responseModalities": ["AUDIO"],
                     "speechConfig": {
                         "voiceConfig": {
                             "prebuiltVoiceConfig": {"voiceName": voice}
@@ -323,6 +323,12 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 user_id="chef_user", session_id="session_1",
                                 new_message=adk_types.Content(role="user", parts=[adk_types.Part.from_text(text=user_msg)]),
                             ):
+                                if event.get_function_calls():
+                                    for fc in event.get_function_calls():
+                                        await websocket.send_text(json.dumps({
+                                            "type": "text",
+                                            "content": f"*[Virtual Chef is calling a sub-agent for {fc.name}...]*"
+                                        }))
                                 if event.is_final_response() and event.content.parts:
                                     response_text = event.content.parts[0].text
                             
@@ -481,4 +487,4 @@ if __name__ == "__main__":
         flags.FLAGS(['main.py'])
     
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8009)
+    uvicorn.run(app, host="0.0.0.0", port=8010)

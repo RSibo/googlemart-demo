@@ -40,11 +40,88 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [visibleProducts, setVisibleProducts] = useState<string[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const nextPlaybackTimeRef = useRef<number>(0);
+  const micStreamRef = useRef<MediaStream | null>(null);
+
+  const playAudioChunk = useCallback((base64Data: string) => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      nextPlaybackTimeRef.current = audioContextRef.current.currentTime;
+    }
+    const ctx = audioContextRef.current;
+    
+    const binaryString = window.atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    const int16Array = new Int16Array(bytes.buffer);
+    const float32Array = new Float32Array(int16Array.length);
+    for (let i = 0; i < int16Array.length; i++) {
+      float32Array[i] = int16Array[i] / 32768.0;
+    }
+    
+    const audioBuffer = ctx.createBuffer(1, float32Array.length, 24000);
+    audioBuffer.copyToChannel(float32Array, 0);
+    
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(ctx.destination);
+    
+    const startTime = Math.max(nextPlaybackTimeRef.current, ctx.currentTime);
+    source.start(startTime);
+    nextPlaybackTimeRef.current = startTime + audioBuffer.duration;
+  }, []);
+
+  const startMic = useCallback((socket: WebSocket) => {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      micStreamRef.current = stream;
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(2048, 1, 1);
+      
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        const int16Array = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          int16Array[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+        }
+        
+        const bytes = new Uint8Array(int16Array.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64Data = window.btoa(binary);
+        
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: 'audio',
+            content: base64Data
+          }));
+        }
+      };
+    }).catch(err => console.error('Failed to get mic:', err));
+  }, []);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
     setIsConnected(false);
     setIsConnecting(false);
@@ -68,12 +145,23 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
         type: 'setup',
         content: settings
       }));
+      startMic(socket);
     };
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'text') {
-        setMessages(prev => [...prev, { role: 'chef', content: data.content, id: Date.now().toString() }]);
+        setMessages(prev => {
+          const lastMessage = prev[prev.length - 1];
+          if (lastMessage && lastMessage.role === 'chef' && !lastMessage.suggestion && !lastMessage.ui) {
+            return [
+              ...prev.slice(0, -1),
+              { ...lastMessage, content: lastMessage.content + data.content }
+            ];
+          } else {
+            return [...prev, { role: 'chef', content: data.content, id: Date.now().toString() }];
+          }
+        });
       } else if (data.type === 'product_suggestion') {
         setMessages(prev => [...prev, { 
           role: 'chef', 
@@ -90,6 +178,10 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }]);
       } else if (data.type === 'video') {
         setAvatarFrame(`data:image/jpeg;base64,${data.content}`);
+      } else if (data.type === 'audio') {
+        if (!isMuted) {
+          playAudioChunk(data.content);
+        }
       } else if (data.type === 'error') {
         console.error('Gemini Error:', data.content);
         setError(data.content);

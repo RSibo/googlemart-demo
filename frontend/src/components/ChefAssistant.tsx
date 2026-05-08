@@ -100,7 +100,7 @@ const ChefAssistant: React.FC = () => {
         }}
       >
         <div style={{ width: '60px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <img src="/gemini_star.svg" alt="Gemini Star" style={{ width: '32px', height: '32px' }} />
+          <img src="/static/gemini_star.svg" alt="Gemini Star" style={{ width: '32px', height: '32px' }} />
         </div>
         <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap', opacity: isOpen ? 1 : 0 }}>Chef Help</span>
       </div>
@@ -181,7 +181,13 @@ const ChefAssistant: React.FC = () => {
           {!isSettingsOpen ? (
             <>
               <div style={{ position: 'relative', width: '100%', height: '150px', background: '#eee', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #e0e0e0' }}>
-                <img src={avatarFrame || "/avatar.png"} alt="Avatar" style={{ maxHeight: '100%' }} />
+                {avatarFrame ? (
+                  <img src={avatarFrame} alt="Avatar" style={{ maxHeight: '100%' }} />
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#888' }}>
+                    Avatar (Audio Only)
+                  </div>
+                )}
                 {isConnected && (
                   <button 
                     onClick={() => setIsMuted(!isMuted)} 
@@ -281,7 +287,9 @@ const ChefAssistant: React.FC = () => {
           ) : (
             <div style={{ padding: '15px', overflowY: 'auto' }}>
               <h3>Settings</h3>
-              {(Object.keys(settings) as Array<keyof typeof settings>).map(key => (
+              {(Object.keys(settings) as Array<keyof typeof settings>)
+                .filter(key => key !== 'modelId')
+                .map(key => (
                 <div key={key} style={{ marginBottom: '10px' }}>
                   <label style={{ display: 'block', fontSize: '12px', textTransform: 'capitalize' }}>
                     {key.replace(/([A-Z])/g, ' $1')}
