@@ -32,12 +32,4 @@ def pantry_scout(cart_items: list[str]) -> list[str]:
             
     return suggestions
 
-def sommelier(product_sku: str) -> list[str]:
-    """Handles flavor pairings (wines, sides)."""
-    suggestions = []
-    if product_sku == "SKU_STEAK":
-        suggestions.extend(["SKU_WINE_RED", "SKU_ROSEMARY", "SKU_BUTTER"])
-    elif product_sku == "SKU_SALMON":
-        suggestions.extend(["SKU_ASPARAGUS"])
-        
-    return suggestions
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useChef } from '../contexts/ChefContext';
 import { useCart } from '../contexts/CartContext';
 import RecipePanel from './RecipePanel';
@@ -14,7 +14,7 @@ const VOICES = [
 const AVATARS = ["Kira", "Ingrid", "Vera", "Sam", "Jay", "Paul", "Ben", "Kai", "Carmen", "Leo", "Piper"];
 
 const ChefAssistant: React.FC = () => {
-  const { messages, sendMessage, avatarFrame, settings, updateSettings, isConnected, isConnecting, error, connect, disconnect, isMuted, setIsMuted } = useChef();
+  const { messages, sendMessage, settings, updateSettings, isConnected, isConnecting, error, connect, disconnect, isMuted, setIsMuted, setOnVideoData } = useChef();
   const { addToCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -24,6 +24,171 @@ const ChefAssistant: React.FC = () => {
   const [position, setPosition] = useState({ x: window.innerWidth - 370, y: window.innerHeight - 520 });
   const [isDragging, setIsDragging] = useState(false);
   const [rel, setRel] = useState({ x: 0, y: 0 });
+  
+  const [hasVideo, setHasVideo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mseRef = useRef<MediaSource | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const videoQueueRef = useRef<ArrayBuffer[]>([]);
+  const cachedInitSegmentRef = useRef<ArrayBuffer | null>(null);
+  const videoErrorListenerAddedRef = useRef<boolean>(false);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+
+  const decodeBase64 = (base64: string): Uint8Array => {
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const initMediaSource = useCallback(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+    if (!window.MediaSource) {
+      console.error("MediaSource API not supported.");
+      return;
+    }
+    if (mseRef.current) return;
+
+    const mediaSource = new MediaSource();
+    mseRef.current = mediaSource;
+    videoElement.src = URL.createObjectURL(mediaSource);
+
+    if (!videoErrorListenerAddedRef.current) {
+      videoElement.addEventListener("error", (e: any) => {
+        if (!mseRef.current) return;
+        mseRef.current = null;
+        sourceBufferRef.current = null;
+        videoQueueRef.current = [];
+        console.error("Video playback error:", videoElement.error);
+      });
+      videoErrorListenerAddedRef.current = true;
+    }
+
+    mediaSource.addEventListener("sourceopen", () => {
+      try {
+        let sourceBuffer = sourceBufferRef.current;
+        if (!sourceBuffer) {
+          const type = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+          if (MediaSource.isTypeSupported(type)) {
+            sourceBuffer = mediaSource.addSourceBuffer(type);
+          } else {
+            sourceBuffer = mediaSource.addSourceBuffer("video/mp4");
+          }
+          sourceBuffer.mode = "sequence";
+          sourceBufferRef.current = sourceBuffer;
+
+          const cachedInitSegment = cachedInitSegmentRef.current;
+          if (cachedInitSegment && videoQueueRef.current[0] !== cachedInitSegment) {
+            videoQueueRef.current.unshift(cachedInitSegment);
+          }
+        }
+
+        const currentSourceBuffer = sourceBufferRef.current;
+        if (!currentSourceBuffer) {
+          return;
+        }
+
+        if (videoQueueRef.current.length > 0 && !currentSourceBuffer.updating) {
+          const chunk = videoQueueRef.current.shift();
+          if (chunk) {
+            try {
+              currentSourceBuffer.appendBuffer(chunk);
+            } catch (e) {
+              console.error("Error appending initial chunk to sourceBuffer:", e);
+            }
+          }
+        }
+
+        currentSourceBuffer.addEventListener("updateend", () => {
+          const sb = sourceBufferRef.current;
+          const ms = mseRef.current;
+          if (!sb || !ms) return;
+
+          if (videoElement.paused) {
+            videoElement.play().catch((_e: any) => {
+              console.error("Error playing video");
+            });
+          }
+
+          if (ms.readyState === 'open' && videoElement.buffered.length > 0) {
+            try {
+              const end = videoElement.buffered.end(videoElement.buffered.length - 1);
+              ms.setLiveSeekableRange(0, end);
+            } catch (e) {}
+          }
+
+          if (!sb.updating && videoElement.currentTime > 6) {
+            try {
+              if (videoElement.buffered.length > 0) {
+                const start = videoElement.buffered.start(0);
+                const endToRemove = videoElement.currentTime - 5;
+                if (endToRemove > start) {
+                  sb.remove(start, endToRemove);
+                  return;
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (videoQueueRef.current.length > 0 && !sb.updating) {
+            const chunk = videoQueueRef.current.shift();
+            if (chunk) {
+              try {
+                sb.appendBuffer(chunk);
+              } catch (e) {
+                console.error("Error appending queued chunk to sourceBuffer:", e);
+              }
+            }
+          }
+        });
+      } catch (e: any) {
+        console.error('Failed to initialize video stream.');
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    setOnVideoData(() => (base64Data: string) => {
+      setHasVideo(true);
+      initMediaSource();
+      
+      const uint8Array = decodeBase64(base64Data);
+      const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength) as ArrayBuffer;
+
+      if (!cachedInitSegmentRef.current) {
+        cachedInitSegmentRef.current = arrayBuffer;
+      }
+
+      const sourceBuffer = sourceBufferRef.current;
+      if (sourceBuffer && !sourceBuffer.updating && videoQueueRef.current.length === 0) {
+        try {
+          sourceBuffer.appendBuffer(arrayBuffer);
+        } catch (e: any) {
+          if (e.name === "InvalidStateError") {
+            mseRef.current = null;
+            sourceBufferRef.current = null;
+            videoQueueRef.current = [];
+            console.error("MediaSource Invalid State Error:", e);
+          } else {
+            console.error("Error appending buffer, pushing to queue:", e);
+            videoQueueRef.current.push(arrayBuffer);
+          }
+        }
+      } else {
+        videoQueueRef.current.push(arrayBuffer);
+      }
+    });
+
+    return () => setOnVideoData(null);
+  }, [initMediaSource, setOnVideoData]);
 
   useEffect(() => {
     fetch('/api/products')
@@ -181,11 +346,18 @@ const ChefAssistant: React.FC = () => {
           {!isSettingsOpen ? (
             <>
               <div style={{ position: 'relative', width: '100%', height: '150px', background: '#eee', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #e0e0e0' }}>
-                {avatarFrame ? (
-                  <img src={avatarFrame} alt="Avatar" style={{ maxHeight: '100%' }} />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#888' }}>
-                    Avatar (Audio Only)
+                <video
+                  ref={videoRef}
+                  style={{ maxHeight: '100%', opacity: hasVideo ? 1 : 0 }}
+                  playsInline
+                  autoPlay
+                />
+                {!hasVideo && (
+                  <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#888' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
                   </div>
                 )}
                 {isConnected && (
@@ -242,8 +414,8 @@ const ChefAssistant: React.FC = () => {
                 {messages.map(msg => (
                   <div key={msg.id} style={{
                     alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    backgroundColor: msg.role === 'user' ? '#0084ff' : '#e4e6eb',
-                    color: msg.role === 'user' ? 'white' : 'black',
+                    backgroundColor: msg.role === 'user' ? '#0084ff' : '#00875a',
+                    color: msg.role === 'user' ? 'white' : 'white',
                     padding: '8px 12px',
                     borderRadius: '8px',
                     maxWidth: '80%'
@@ -272,6 +444,7 @@ const ChefAssistant: React.FC = () => {
                     )}
                   </div>
                 ))}
+                <div ref={transcriptEndRef} />
               </div>
               <div style={{ padding: '15px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: '10px' }}>
                 <input 

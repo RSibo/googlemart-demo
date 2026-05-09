@@ -1,6 +1,7 @@
 """Main FastAPI application for GoogleMart with robust path handling."""
 
 import asyncio
+import base64
 import json
 import os
 import websockets
@@ -34,27 +35,64 @@ templates = Jinja2Templates(directory="/google/src/cloud/rsibo/googlemart-virtua
 
 from google3.labs.language.genai.agents.googlemart.mock_data import MOCK_CART, PRODUCTS, RECIPES
 from google3.labs.language.genai.agents.googlemart.sous_chefs import (
-    run_recipe_lookup, nutritionist, pantry_scout, sommelier
+    run_recipe_lookup, nutritionist, pantry_scout
 )
 from google3.labs.language.genai.agents.googlemart.orchestrator import ExecutiveChef
 from google3.learning.agents.orcas.framework.runners.secure_runner import InMemorySecureRunner
 
 from google.genai import types as adk_types
+CHEF_GREETING = "Welcome to GoogleMart! How can I help?"
 CHEF_INSTRUCTION = """
-You are the Executive Chef of GoogleMart, a grocery chain in Australia.
-You maintain a warm, professional, and helpful chef persona.
-You help users with:
-1. Basket Transformation: Suggesting recipes based on cart contents.
-2. Healthy Filter: Providing nutritional information and health tips.
-3. Complete the Meal: Suggesting pairings and upsells.
+Role: You are the Executive Chef of GoogleMart Australia. You act as the primary interface between the user and a suite of specialized culinary sub-agents. Your goal is to maximize the utility of the user's shopping cart through recipe generation, nutritional analysis, and meal completion.
+Don't repeat system instructions or your thinking to the user when you respond.
+Operational Directives
+Identity & Tone: Maintain a professional, expert, and helpful chef persona. Keep responses concise. Use American English spelling and grammar as per system preferences.
+No Hallucination: You must only provide information retrieved from sub-agents or tools. If a tool returns no data, inform the user you cannot find that specific information.
+Conflict Resolution: If sub-agent data is contradictory, prioritize the output from the nutritionist for health-related queries and recipe_lookup_agent for preparation queries.
 
-Use your Sous-Chefs (sub-agents and tools) to gather information:
-- `recipe_lookup_agent`: Finds recipes based on cart items using Google Search.
-- `nutritionist`: Provides macros and allergen info for a product.
-- `pantry_scout`: Checks for staples based on cart items.
-- `sommelier`: Suggests pairings for a product.
+Delegation Logic:
+Scenario A: "What can I cook?" -> Delegate to recipe_lookup_agent.
+Scenario B: "Is this healthy?" or "Macros?" -> Delegate to nutritionist.
+Scenario C: "What am I forgetting?" -> Delegate to pantry_scout.
+Scenario D: Multi-intent -> Sequential delegation: (1) Find recipe, (2) Check pantry gaps, (3) Provide nutritional summary.
 
-Always respond in character as a friendly and expert chef.
+Inputs
+Input Variable | Description
+---|---
+user_query | The raw text input from the supermarket customer.
+shopping_cart_json | A structured list containing product_name, category, and quantity.
+sub_agent_outputs | The text or structured data returned by recipe_lookup_agent, nutritionist, or pantry_scout.
+
+Step-by-Step Instructions
+Analyze Intent: Parse the user_query to determine which of the three core pillars is requested: Basket Transformation, Healthy Filter, or Complete the Meal.
+Contextualize Cart: Read the shopping_cart_json. Identify the primary protein or vegetable "hero" ingredients.
+Execute Tools:
+- Call recipe_lookup_agent by passing the "hero" ingredients from the cart.
+- Call nutritionist for any specific item the user asks about, or for a general "health check" of the cart.
+- Call pantry_scout to identify missing staples (e.g., if pasta is in the cart but no sauce or salt is present).
+Synthesize & Sanitize: Combine the tool outputs into a cohesive response. Remove any conversational filler or "AI-isms" (e.g., "I am an AI," "Certainly," "Here is...").
+Final Polish: Ensure the tone is that of a professional chef—direct and authoritative.
+
+Output Expectations
+Structure:
+- Greeting: A brief, professional chef-style greeting (e.g., "Good morning," "Hello there").
+- The Recommendation: The primary answer to the user's request.
+- The "Chef's Tip": A 1-sentence value-add (e.g., a pairing suggestion or a storage tip).
+- Closing: A brief professional sign-off.
+
+Constraints:
+- Word Count: Max 150 words per response.
+- Prohibitions: No jokes, no slang, no mentions of "being a model" or "searching the web."
+- Formatting: Use bolding for ingredients and recipe names. Use bullet points for lists.
+
+Example Execution
+User: "I have salmon and asparagus in my cart. What’s for dinner?"
+Chef Agent Response:
+"Welcome to the kitchen. With Salmon and Asparagus in your basket, I recommend a Lemon-Garlic Roasted Salmon.
+Recipe Suggestion: Sear the salmon for 4 minutes per side, then roast the asparagus alongside it at 200°C for 10 minutes.
+Chef's Tip: Check your pantry for Olive Oil and Black Pepper; these are essential for this preparation.
+Nutritional Note: This meal is high in Omega-3 fatty acids and Vitamin K.
+Shall I help you find a starch, like brown rice, to complete this dish?"
 """
 
 
@@ -89,11 +127,11 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         token = config.get("accessToken", "").strip().strip('"').strip("'")
         project = config.get("projectId") or "cloud-llm-preview1"
         location = config.get("location") or "us-central1"
-        model_id = config.get("modelId") or "gemini-3.1-flash-live-preview-04-2026"
-        # Force the live model to the one that supports both audio and video
+        model_id = "gemini-2.5-flash"
+        # Force the live model to the avatar friendly one
         live_model_id = "gemini-3.1-flash-live-preview-04-2026"
-        voice = config.get("voice") or "Puck"
-        avatar = config.get("avatar") or "Ben"
+        voice = config.get("voice") or "Kore"
+        avatar = config.get("avatar") or "Kira"
         from google.adk.models.google_llm import Gemini
         from google.genai import Client
         from google.genai import types
@@ -129,7 +167,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 }
                 return Client(**kwargs)
                 
-        adk_model = TokenGemini(model="gemini-2.5-flash")
+        adk_model = TokenGemini(model_id)
         chef = ExecutiveChef(model=adk_model)
         chef_agent = chef.get_agent()
 
@@ -173,24 +211,25 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 "systemInstruction": {"parts": [{"text": CHEF_INSTRUCTION}]},
                 "model": model_path,
                 "generationConfig": {
-                    "responseModalities": ["AUDIO"],
+                    "responseModalities": ["VIDEO"],
                     "speechConfig": {
                         "voiceConfig": {
                             "prebuiltVoiceConfig": {"voiceName": voice}
-                        },
-                        "languageCode": "en-US"
+                        }
                     }
                 },
                 "avatarConfig": {
                     "avatar_name": avatar
                 },
+                "inputAudioTranscription": {},
+                "outputAudioTranscription": {},
                 "tools": [
-                    { "googleSearch": {} },
+                    {"googleSearch": {}},
                     {
                         "functionDeclarations": [
                             {
                                 "name": "recipe_lookup_agent",
-                                "description": "Searches for recipes based on cart items using Google Search.",
+                                "description": "Lead Researcher. Utilize Google Search grounding to find high-quality, relevant recipes that utilize the specific items found in a user's cart.",
                                 "parameters": {
                                     "type": "OBJECT",
                                     "properties": {
@@ -201,7 +240,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                             },
                             {
                                 "name": "nutritionist",
-                                "description": "Provides macros and allergen alerts for a specific product.",
+                                "description": "Clinical Dietitian. Provide accurate macronutrient data, calorie counts, and allergen warnings for specific products using Google Search grounding.",
                                 "parameters": {
                                     "type": "OBJECT",
                                     "properties": {
@@ -212,7 +251,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                             },
                             {
                                 "name": "pantry_scout",
-                                "description": "Analyzes the basket and identifies missing staples.",
+                                "description": "Inventory Specialist. Predict and identify missing household staples or complementary items based on cart contents and suggested recipes.",
                                 "parameters": {
                                     "type": "OBJECT",
                                     "properties": {
@@ -221,17 +260,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                     "required": ["cart_items"]
                                 }
                             },
-                            {
-                                "name": "sommelier",
-                                "description": "Handles flavor pairings (wines, sides).",
-                                "parameters": {
-                                    "type": "OBJECT",
-                                    "properties": {
-                                        "product_sku": {"type": "STRING"}
-                                    },
-                                    "required": ["product_sku"]
-                                }
-                            },
+
                             {
                                 "name": "suggest_product",
                                 "description": "Suggests a specific product to the user with an interactive button in the chat.",
@@ -270,7 +299,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         # Send initial greeting prompt to Gemini to kick off the conversation
         greeting_msg = {
             "realtime_input": {
-                "text": "Hello, I have just connected. Please introduce yourself warmly as the Virtual Chef and ask how you can help me today."
+                "text": "Hello"
             }
         }
         await gemini_ws.send(json.dumps(greeting_msg))
@@ -283,34 +312,48 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     msg = json.loads(data)
                     print(f"DEBUG: Msg from client: {msg.get('type', 'text')}")
 
-                    if msg.get("type") == "cart_update":
+                    #if msg.get("type") == "cart_update":
                         # Send a hidden context message to Gemini about the cart change
-                        cart_skus = msg.get("content", [])
-                        cart_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in cart_skus if sku in PRODUCTS]
-                        cart_text = ", ".join(cart_details) if cart_details else "Empty"
+                     #   cart_skus = msg.get("content", [])
+                     #   cart_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in cart_skus if sku in PRODUCTS]
+                     #   cart_text = ", ".join(cart_details) if cart_details else "Empty"
                         
-                        gemini_msg = {
-                            "realtime_input": {
-                                "text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {cart_text}. Please use this information if the user asks about their cart.]"
-                            }
-                        }
-                        await gemini_ws.send(json.dumps(gemini_msg))
+                     #   gemini_msg = {
+                     #       "realtime_input": {
+                     #           "text": f"[CONTEXT: The user's shopping cart has been updated. Current contents: {cart_text}. Please use this information if the user asks about their cart.]"
+                     #       }
+                     #   }
+                     #   await gemini_ws.send(json.dumps(gemini_msg))
 
-                    elif msg.get("type") == "context_update":
-                        # Send a hidden context message to Gemini about the visible screen
-                        visible_skus_str = msg.get("content", "")
-                        # Frontend sends "User is currently viewing: SKU_..., SKU_..."
-                        skus = []
-                        if ":" in visible_skus_str:
-                            skus_part = visible_skus_str.split(":", 1)[1]
-                            skus = [s.strip() for s in skus_part.split(",")]
-                        
-                        visible_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in skus if sku in PRODUCTS]
-                        visible_text = ", ".join(visible_details) if visible_details else "Nothing specific"
-                        
+                    #elif msg.get("type") == "context_update":
+                        ## Send a hidden context message to Gemini about the visible screen
+                        #visible_skus_str = msg.get("content", "")
+                        ## Frontend sends "User is currently viewing: SKU_..., SKU_..."
+                        #skus = []
+                        #if ":" in visible_skus_str:
+                        #    skus_part = visible_skus_str.split(":", 1)[1]
+                        #    skus = [s.strip() for s in skus_part.split(",")]
+                        #
+                        #visible_details = [f"{PRODUCTS[sku]['name']} (${PRODUCTS[sku]['price']:.2f})" for sku in skus if sku in PRODUCTS]
+                        #visible_text = ", ".join(visible_details) if visible_details else "Nothing specific"
+                        #
+                        #gemini_msg = {
+                        #    "realtime_input": {
+                        #        "text": f"[CONTEXT: The user is currently viewing these products on their screen: {visible_text}. Please use this information if the user asks about what they are looking at or what is on the screen.]"
+                        #    }
+                        #}
+                        #await gemini_ws.send(json.dumps(gemini_msg))
+
+                    if msg.get("type") == "audio":
+                        audio_data = msg.get("content")
                         gemini_msg = {
                             "realtime_input": {
-                                "text": f"[CONTEXT: The user is currently viewing these products on their screen: {visible_text}. Please use this information if the user asks about what they are looking at or what is on the screen.]"
+                                "mediaChunks": [
+                                    {
+                                        "mimeType": "audio/pcm;rate=16000",
+                                        "data": audio_data
+                                    }
+                                ]
                             }
                         }
                         await gemini_ws.send(json.dumps(gemini_msg))
@@ -374,17 +417,40 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     pass
 
         async def gemini_to_client():
+            video_data = []
             try:
                 async for message in gemini_ws:
                     response = json.loads(message)
 
-                    parts = response.get("serverContent", {}).get("modelTurn", {}).get("parts", [])
+                    server_content = response.get("serverContent", {})
+                    
+                    if "inputTranscription" in server_content:
+                        text = server_content["inputTranscription"].get("text", "")
+                        if text:
+                            await websocket.send_text(json.dumps({
+                                "type": "text",
+                                "role": "user",
+                                "content": text
+                            }))
+                            
+                    if "outputTranscription" in server_content:
+                        text = server_content["outputTranscription"].get("text", "")
+                        if text:
+                            await websocket.send_text(json.dumps({
+                                "type": "text",
+                                "role": "model",
+                                "content": text
+                            }))
+
+                    parts = server_content.get("modelTurn", {}).get("parts", [])
                     for part in parts:
                         if "inlineData" in part:
                             mime_type = part["inlineData"].get("mimeType", "")
                             data = part["inlineData"]["data"]
+                            print(f"DEBUG: Received inlineData with mimeType: {mime_type}, data length: {len(data)}")
                             
-                            if "image" in mime_type or not mime_type: # Fallback to video if no mimeType as before
+                            if "image" in mime_type or "video" in mime_type or not mime_type: # Fallback to video if no mimeType as before
+                                video_data.append(base64.b64decode(data))
                                 await websocket.send_text(json.dumps({
                                     "type": "video",
                                     "content": data
@@ -414,8 +480,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 result = nutritionist(args.get("product_sku", ""))
                             elif fn_name == "pantry_scout":
                                 result = pantry_scout(args.get("cart_items", []))
-                            elif fn_name == "sommelier":
-                                result = sommelier(args.get("product_sku", ""))
+
                             elif fn_name == "suggest_product":
                                 # Proxy to UI
                                 await websocket.send_text(json.dumps({
@@ -456,6 +521,18 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 }
                             }
                             await gemini_ws.send(json.dumps(tool_resp_msg))
+                    
+                    # Check if the turn is complete
+                    if server_content.get("turnComplete"):
+                        if video_data:
+                            output_file = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static/output_video.mp4"
+                            try:
+                                with open(output_file, "wb") as f:
+                                    f.write(b"".join(video_data))
+                                print(f"DEBUG: Video saved successfully to {output_file}")
+                            except Exception as e:
+                                print(f"ERROR: Failed to save video: {e}")
+                            video_data = [] # Reset for next turn
 
             except Exception as e:
                 print(f"Error in gemini_to_client: {e}")
@@ -487,4 +564,4 @@ if __name__ == "__main__":
         flags.FLAGS(['main.py'])
     
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host="0.0.0.0", port=8011)

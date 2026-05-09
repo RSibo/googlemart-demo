@@ -17,6 +17,8 @@ interface ChefContextType {
   disconnect: () => void;
   isMuted: boolean;
   setIsMuted: (muted: boolean) => void;
+  setOnVideoData: (callback: ((data: string) => void) | null) => void;
+  audioContext: AudioContext | null;
 }
 
 const ChefContext = createContext<ChefContextType | undefined>(undefined);
@@ -25,9 +27,9 @@ const DEFAULT_SETTINGS: ChefSettings = {
   accessToken: localStorage.getItem('accessToken') || '',
   projectId: localStorage.getItem('projectId') || 'cloud-llm-preview1',
   location: localStorage.getItem('location') || 'us-central1',
-  modelId: localStorage.getItem('modelId') || 'gemini-3.1-flash-live-preview-04-2026',
-  voice: localStorage.getItem('voice') || 'Puck',
-  avatar: localStorage.getItem('avatar') || 'Ben'
+  modelId: 'gemini-3.1-flash-live-preview-04-2026',
+  voice: localStorage.getItem('voice') || 'Kore',
+  avatar: localStorage.getItem('avatar') || 'Kira'
 };
 
 export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,6 +41,7 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
   const [visibleProducts, setVisibleProducts] = useState<string[]>([]);
   const [isMuted, setIsMuted] = useState(false);
+  const [onVideoData, setOnVideoData] = useState<((data: string) => void) | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextPlaybackTimeRef = useRef<number>(0);
@@ -88,6 +91,15 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
+        
+        // Simple VAD to filter out silence
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+        if (rms < 0.005) return; // Skip sending if too quiet
+        
         const int16Array = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           int16Array[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
@@ -153,13 +165,14 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.type === 'text') {
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === 'chef' && !lastMessage.suggestion && !lastMessage.ui) {
+          const role = data.role || 'chef';
+          if (lastMessage && lastMessage.role === role && !lastMessage.suggestion && !lastMessage.ui) {
             return [
               ...prev.slice(0, -1),
               { ...lastMessage, content: lastMessage.content + data.content }
             ];
           } else {
-            return [...prev, { role: 'chef', content: data.content, id: Date.now().toString() }];
+            return [...prev, { role: role, content: data.content, id: Date.now().toString() }];
           }
         });
       } else if (data.type === 'product_suggestion') {
@@ -177,7 +190,9 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: Date.now().toString() 
         }]);
       } else if (data.type === 'video') {
-        setAvatarFrame(`data:image/jpeg;base64,${data.content}`);
+        if (onVideoData) {
+          onVideoData(data.content);
+        }
       } else if (data.type === 'audio') {
         if (!isMuted) {
           playAudioChunk(data.content);
@@ -240,7 +255,8 @@ export const ChefProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <ChefContext.Provider value={{ 
       messages, sendMessage, sendCartUpdate, settings, updateSettings, 
       avatarFrame, isConnected, isConnecting, error, visibleProducts, setVisibleProducts,
-      connect, disconnect, isMuted, setIsMuted
+      connect, disconnect, isMuted, setIsMuted, setOnVideoData,
+      audioContext: audioContextRef.current
     }}>
       {children}
     </ChefContext.Provider>
