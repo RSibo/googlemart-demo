@@ -157,6 +157,7 @@ const ChefAssistant: React.FC = () => {
 
   useEffect(() => {
     setOnVideoData(() => (base64Data: string) => {
+      console.log("DEBUG: Received video data chunk, length:", base64Data.length);
       setHasVideo(true);
       initMediaSource();
       
@@ -334,7 +335,7 @@ const ChefAssistant: React.FC = () => {
             }}>
               <video
                 ref={videoRef}
-                style={{ height: '100%', width: '100%', objectFit: 'cover', opacity: hasVideo ? 1 : 0 }}
+                style={{ height: '100%', width: '100%', objectFit: 'cover', opacity: 1 }}
                 playsInline
                 autoPlay
               />
@@ -408,7 +409,7 @@ const ChefAssistant: React.FC = () => {
                 </button>
               </div>
             </div>
-
+  
             {/* Right Section: Chat or Settings */}
             <div style={{
               flex: 1,
@@ -443,7 +444,7 @@ const ChefAssistant: React.FC = () => {
                         maxWidth: '80%'
                       }}>
                         {msg.content}
-
+  
                         {msg.suggestion && products[msg.suggestion] && (
                           <div style={{ marginTop: '10px', background: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', color: 'black' }}>
                             <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{products[msg.suggestion].name}</div>
@@ -455,7 +456,7 @@ const ChefAssistant: React.FC = () => {
                             </button>
                           </div>
                         )}
-
+  
                         {msg.ui?.component === 'recipe_card' && (
                           <button 
                             onClick={() => setActiveRecipe(msg.ui!.props)}

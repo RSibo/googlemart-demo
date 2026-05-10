@@ -420,6 +420,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
             try:
                 async for message in gemini_ws:
                     response = json.loads(message)
+                    print(f"DEBUG: Received message from Gemini, keys: {list(response.keys())}")
 
                     server_content = response.get("serverContent", {})
                     
@@ -431,6 +432,43 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 "role": "user",
                                 "content": text
                             }))
+                            
+                            # Run ADK agent asynchronously for voice input
+                            async def process_voice_with_adk(user_text):
+                                response_text = ""
+                                try:
+                                    async for event in runner.run_async(
+                                        user_id="chef_user", session_id="session_1",
+                                        new_message=adk_types.Content(role="user", parts=[adk_types.Part.from_text(text=user_text)]),
+                                    ):
+                                        if event.is_final_response() and event.content.parts:
+                                            response_text = event.content.parts[0].text
+                                    
+                                    print(f"DEBUG: ADK Agent response to voice: {response_text}")
+                                    
+                                    # Send response to Gemini Live to speak it
+                                    gemini_msg = {
+                                        "clientContent": {
+                                            "turns": [
+                                                {
+                                                    "role": "user",
+                                                    "parts": [{"text": response_text}]
+                                                }
+                                            ],
+                                            "turnComplete": True
+                                        }
+                                    }
+                                    await gemini_ws.send(json.dumps(gemini_msg))
+                                    
+                                    # Also send text response to client UI
+                                    await websocket.send_text(json.dumps({
+                                        "type": "text",
+                                        "content": response_text
+                                    }))
+                                except Exception as e:
+                                    print(f"Error running ADK agent for voice: {e}")
+                            
+                            asyncio.create_task(process_voice_with_adk(text))
                             
                     if "outputTranscription" in server_content:
                         text = server_content["outputTranscription"].get("text", "")
@@ -455,6 +493,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                     "content": data
                                 }))
                             elif "audio" in mime_type:
+                                print(f"DEBUG: Forwarding audio chunk to client, length: {len(data)}")
                                 await websocket.send_text(json.dumps({
                                     "type": "audio",
                                     "content": data
@@ -520,6 +559,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                                 }
                             }
                             await gemini_ws.send(json.dumps(tool_resp_msg))
+                            print(f"DEBUG: Sent tool response to Gemini: {fn_name}")
                     
                     # Check if the turn is complete
                     if server_content.get("turnComplete"):
