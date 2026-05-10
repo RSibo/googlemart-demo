@@ -1,6 +1,6 @@
 """Sous Chefs for GoogleMart."""
 
-from google3.labs.language.genai.agents.googlemart.mock_data import PRODUCTS, RECIPES
+from mock_data import PRODUCTS, RECIPES
 
 async def run_recipe_lookup(cart_items: list[str]) -> str:
     """Mock implementation of recipe lookup."""

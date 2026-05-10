@@ -5,7 +5,7 @@ from google.adk.models import base_llm
 from google.adk.planners import built_in_planner
 from google.genai import types as genai_types
 
-from google3.labs.language.genai.agents.googlemart.sous_chefs import (
+from sous_chefs import (
     run_recipe_lookup, nutritionist, pantry_scout
 )
 

@@ -11,8 +11,8 @@ from fastapi.templating import Jinja2Templates
 import traceback
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-static_dir = "labs/language/genai/agents/googlemart/frontend/dist"
-assets_dir = "labs/language/genai/agents/googlemart/frontend/dist/assets"
+static_dir = os.path.join(current_dir, "frontend/dist")
+assets_dir = os.path.join(current_dir, "frontend/dist/assets")
 
 print(f"DEBUG: current_dir={current_dir}")
 print(f"DEBUG: static_dir={static_dir}, exists={os.path.exists(static_dir)}")
@@ -25,20 +25,20 @@ print(f"DEBUG: cwd={os.getcwd()}")
 app = fastapi.FastAPI()
 
 # Serve React assets
-app.mount("/assets", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static/assets"), name="assets")
+app.mount("/assets", StaticFiles(directory=os.path.join(current_dir, "static/assets")), name="assets")
 # Also keep old static for magic_icon.png if needed, or better move it to frontend/public
 # For now let's mount the old static as well
-app.mount("/static", StaticFiles(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static"), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(current_dir, "static")), name="static")
 
 # Setup templates to point to React's dist
-templates = Jinja2Templates(directory="/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/templates")
+templates = Jinja2Templates(directory=os.path.join(current_dir, "templates"))
 
-from google3.labs.language.genai.agents.googlemart.mock_data import MOCK_CART, PRODUCTS, RECIPES
-from google3.labs.language.genai.agents.googlemart.sous_chefs import (
+from mock_data import MOCK_CART, PRODUCTS, RECIPES
+from sous_chefs import (
     run_recipe_lookup, nutritionist, pantry_scout
 )
-from google3.labs.language.genai.agents.googlemart.orchestrator import ExecutiveChef
-from google3.learning.agents.orcas.framework.runners.secure_runner import InMemorySecureRunner
+from orchestrator import ExecutiveChef
+# from google3.learning.agents.orcas.framework.runners.secure_runner import InMemorySecureRunner
 
 from google.genai import types as adk_types
 CHEF_GREETING = "Welcome to GoogleMart! How can I help?"
@@ -171,14 +171,14 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
         chef = ExecutiveChef(model=adk_model)
         chef_agent = chef.get_agent()
 
-        from google3.learning.agents.orcas.framework.runners.secure_runner import SecureRunner
+        from google.adk.runners import Runner
         from google.adk.sessions.in_memory_session_service import InMemorySessionService
         from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
         from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
         
         session_service = InMemorySessionService()
         
-        runner = SecureRunner(
+        runner = Runner(
             agent=chef_agent,
             app_name="chef_app",
             session_service=session_service,
@@ -525,7 +525,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                     # Check if the turn is complete
                     if server_content.get("turnComplete"):
                         if video_data:
-                            output_file = "/google/src/cloud/rsibo/googlemart-virtual-chef-adk/google3/labs/language/genai/agents/googlemart/static/output_video.mp4"
+                            output_file = os.path.join(current_dir, "static/output_video.mp4")
                             try:
                                 with open(output_file, "wb") as f:
                                     f.write(b"".join(video_data))

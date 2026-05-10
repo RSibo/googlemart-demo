@@ -21,7 +21,7 @@ const ChefAssistant: React.FC = () => {
   const [input, setInput] = useState('');
   const [activeRecipe, setActiveRecipe] = useState<any>(null);
   const [products, setProducts] = useState<Record<string, Product>>({});
-  const [position, setPosition] = useState({ x: window.innerWidth - 370, y: window.innerHeight - 520 });
+  const [position, setPosition] = useState({ x: window.innerWidth - 650, y: window.innerHeight - 520 });
   const [isDragging, setIsDragging] = useState(false);
   const [rel, setRel] = useState({ x: 0, y: 0 });
   
@@ -62,7 +62,7 @@ const ChefAssistant: React.FC = () => {
     videoElement.src = URL.createObjectURL(mediaSource);
 
     if (!videoErrorListenerAddedRef.current) {
-      videoElement.addEventListener("error", (e: any) => {
+      videoElement.addEventListener("error", () => {
         if (!mseRef.current) return;
         mseRef.current = null;
         sourceBufferRef.current = null;
@@ -276,7 +276,7 @@ const ChefAssistant: React.FC = () => {
           position: 'fixed',
           top: `${position.y}px`,
           left: `${position.x}px`,
-          width: '350px',
+          width: '630px',
           height: '500px',
           backgroundColor: 'white',
           border: '1px solid #e0e0e0',
@@ -284,8 +284,10 @@ const ChefAssistant: React.FC = () => {
           boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 1002
+          zIndex: 1002,
+          overflow: 'hidden'
         }}>
+          {/* Header */}
           <div 
             onMouseDown={(e) => {
               if (e.button !== 0) return;
@@ -299,43 +301,17 @@ const ChefAssistant: React.FC = () => {
               background: '#00875a', 
               color: 'white', 
               padding: '15px', 
-              borderRadius: '12px 12px 0 0', 
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center',
               cursor: 'move'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span>Virtual Chef</span>
-              <button 
-                onClick={() => isConnected || isConnecting ? disconnect() : connect()} 
-                disabled={isConnecting}
-                style={{ 
-                  background: isConnecting ? '#888' : (isConnected ? '#d93025' : '#0084ff'), 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '4px 8px', 
-                  borderRadius: '4px', 
-                  cursor: isConnecting ? 'wait' : 'pointer', 
-                  fontSize: '12px', 
-                  fontWeight: 'bold',
-                  opacity: isConnecting ? 0.7 : 1
-                }}
-              >
-                {isConnecting ? 'Connecting...' : (isConnected ? 'Disconnect' : 'Connect')}
-              </button>
-              <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '4px' }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-              </button>
-            </div>
+            <span>Virtual Chef</span>
             <button 
               onClick={() => {
                 setIsOpen(false);
-                setPosition({ x: window.innerWidth - 370, y: window.innerHeight - 520 });
+                setPosition({ x: window.innerWidth - 650, y: window.innerHeight - 520 });
               }} 
               style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold' }}
             >
@@ -343,159 +319,209 @@ const ChefAssistant: React.FC = () => {
             </button>
           </div>
 
-          {!isSettingsOpen ? (
-            <>
-              <div style={{ position: 'relative', width: '100%', height: '150px', background: '#eee', display: 'flex', justifyContent: 'center', borderBottom: '1px solid #e0e0e0' }}>
-                <video
-                  ref={videoRef}
-                  style={{ maxHeight: '100%', opacity: hasVideo ? 1 : 0 }}
-                  playsInline
-                  autoPlay
-                />
-                {!hasVideo && (
-                  <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#888' }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
+          {/* Content Area: Flex Row */}
+          <div style={{ display: 'flex', flexDirection: 'row', flex: 1, overflow: 'hidden' }}>
+            {/* Left Section: Avatar + Controls */}
+            <div style={{
+              width: '280px',
+              height: '100%',
+              position: 'relative',
+              backgroundColor: '#eee',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              borderRight: '1px solid #e0e0e0'
+            }}>
+              <video
+                ref={videoRef}
+                style={{ height: '100%', width: '100%', objectFit: 'cover', opacity: hasVideo ? 1 : 0 }}
+                playsInline
+                autoPlay
+              />
+              {!hasVideo && (
+                <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#888' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+              )}
+              
+              {/* Controls Overlay */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: 'rgba(0,0,0,0.5)',
+                padding: '10px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {/* Settings Button */}
+                  <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
-                  </div>
-                )}
-                {isConnected && (
-                  <button 
-                    onClick={() => setIsMuted(!isMuted)} 
-                    style={{
-                      position: 'absolute',
-                      bottom: '10px',
-                      right: '10px',
-                      background: 'rgba(0,0,0,0.5)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px'
-                    }}
-                    title={isMuted ? "Unmute Avatar" : "Mute Avatar"}
-                  >
-                    {isMuted ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                        <line x1="23" y1="9" x2="17" y2="15"></line>
-                        <line x1="17" y1="9" x2="23" y2="15"></line>
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-                      </svg>
-                    )}
                   </button>
-                )}
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {error && (
-                  <div style={{
-                    backgroundColor: '#ffebee',
-                    color: '#d32f2f',
-                    padding: '10px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    border: '1px solid #ffcdd2',
-                    marginBottom: '10px'
-                  }}>
-                    <strong>Connection Error:</strong> {error}
-                  </div>
-                )}
-                {messages.map(msg => (
-                  <div key={msg.id} style={{
-                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    backgroundColor: msg.role === 'user' ? '#0084ff' : '#00875a',
-                    color: msg.role === 'user' ? 'white' : 'white',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    maxWidth: '80%'
-                  }}>
-                    {msg.content}
-
-                    {msg.suggestion && products[msg.suggestion] && (
-                      <div style={{ marginTop: '10px', background: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', color: 'black' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{products[msg.suggestion].name}</div>
-                        <button 
-                          onClick={() => handleSuggestAction(msg.suggestion!)}
-                          style={{ width: '100%', marginTop: '5px', background: '#00875a', color: 'white', border: 'none', padding: '5px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
-                        >
-                          Add to Cart
-                        </button>
-                      </div>
-                    )}
-
-                    {msg.ui?.component === 'recipe_card' && (
-                      <button 
-                        onClick={() => setActiveRecipe(msg.ui!.props)}
-                        style={{ width: '100%', marginTop: '10px', background: 'white', color: '#00875a', border: '1px solid #00875a', padding: '5px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
-                      >
-                        View Full Recipe
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <div ref={transcriptEndRef} />
-              </div>
-              <div style={{ padding: '15px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: '10px' }}>
-                <input 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Ask the Chef..."
-                  style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}
-                />
-                <button onClick={handleSend} style={{ background: '#00875a', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>Send</button>
-              </div>
-            </>
-          ) : (
-            <div style={{ padding: '15px', overflowY: 'auto' }}>
-              <h3>Settings</h3>
-              {(Object.keys(settings) as Array<keyof typeof settings>)
-                .filter(key => key !== 'modelId')
-                .map(key => (
-                <div key={key} style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', textTransform: 'capitalize' }}>
-                    {key.replace(/([A-Z])/g, ' $1')}
-                  </label>
-                  {key === 'voice' ? (
-                    <select 
-                      value={settings.voice}
-                      onChange={(e) => updateSettings({ ...settings, voice: e.target.value })}
-                      style={{ width: '100%', padding: '5px' }}
-                    >
-                      {VOICES.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  ) : key === 'avatar' ? (
-                    <select 
-                      value={settings.avatar}
-                      onChange={(e) => updateSettings({ ...settings, avatar: e.target.value })}
-                      style={{ width: '100%', padding: '5px' }}
-                    >
-                      {AVATARS.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                  ) : (
-                    <input 
-                      type={key === 'accessToken' ? 'password' : 'text'}
-                      value={settings[key]}
-                      onChange={(e) => updateSettings({ ...settings, [key]: e.target.value })}
-                      style={{ width: '100%', padding: '5px' }}
-                    />
+                  
+                  {/* Mute Button */}
+                  {isConnected && (
+                    <button onClick={() => setIsMuted(!isMuted)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }}>
+                      {isMuted ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                          <line x1="23" y1="9" x2="17" y2="15"></line>
+                          <line x1="17" y1="9" x2="23" y2="15"></line>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                        </svg>
+                      )}
+                    </button>
                   )}
                 </div>
-              ))}
-              <button onClick={() => setIsSettingsOpen(false)} style={{ width: '100%', padding: '10px', background: '#00875a', color: 'white', border: 'none', borderRadius: '4px' }}>Done</button>
+                
+                {/* Connect/Disconnect Button */}
+                <button 
+                  onClick={() => isConnected || isConnecting ? disconnect() : connect()} 
+                  disabled={isConnecting}
+                  style={{ 
+                    background: isConnecting ? '#888' : (isConnected ? '#d93025' : '#0084ff'), 
+                    color: 'white', 
+                    border: 'none', 
+                    padding: '4px 8px', 
+                    borderRadius: '4px', 
+                    cursor: isConnecting ? 'wait' : 'pointer', 
+                    fontSize: '12px', 
+                    fontWeight: 'bold',
+                    opacity: isConnecting ? 0.7 : 1
+                  }}
+                >
+                  {isConnecting ? 'Connecting...' : (isConnected ? 'Disconnect' : 'Connect')}
+                </button>
+              </div>
             </div>
-          )}
+
+            {/* Right Section: Chat or Settings */}
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%'
+            }}>
+              {!isSettingsOpen ? (
+                <>
+                  {/* Messages */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {error && (
+                      <div style={{
+                        backgroundColor: '#ffebee',
+                        color: '#d32f2f',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        border: '1px solid #ffcdd2',
+                        marginBottom: '10px'
+                      }}>
+                        <strong>Connection Error:</strong> {error}
+                      </div>
+                    )}
+                    {messages.map(msg => (
+                      <div key={msg.id} style={{
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        backgroundColor: msg.role === 'user' ? '#0084ff' : '#00875a',
+                        color: 'white',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        maxWidth: '80%'
+                      }}>
+                        {msg.content}
+
+                        {msg.suggestion && products[msg.suggestion] && (
+                          <div style={{ marginTop: '10px', background: 'white', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', color: 'black' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{products[msg.suggestion].name}</div>
+                            <button 
+                              onClick={() => handleSuggestAction(msg.suggestion!)}
+                              style={{ width: '100%', marginTop: '5px', background: '#00875a', color: 'white', border: 'none', padding: '5px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+                            >
+                              Add to Cart
+                            </button>
+                          </div>
+                        )}
+
+                        {msg.ui?.component === 'recipe_card' && (
+                          <button 
+                            onClick={() => setActiveRecipe(msg.ui!.props)}
+                            style={{ width: '100%', marginTop: '10px', background: 'white', color: '#00875a', border: '1px solid #00875a', padding: '5px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+                          >
+                            View Full Recipe
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <div ref={transcriptEndRef} />
+                  </div>
+                  
+                  {/* Input */}
+                  <div style={{ padding: '15px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: '10px' }}>
+                    <input 
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                      placeholder="Ask the Chef..."
+                      style={{ flex: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}
+                    />
+                    <button onClick={handleSend} style={{ background: '#00875a', color: 'white', border: 'none', padding: '10px', borderRadius: '4px' }}>Send</button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '15px', overflowY: 'auto', flex: 1 }}>
+                  <h3>Settings</h3>
+                  {(Object.keys(settings) as Array<keyof typeof settings>)
+                    .filter(key => key !== 'modelId')
+                    .map(key => (
+                    <div key={key} style={{ marginBottom: '10px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', textTransform: 'capitalize' }}>
+                        {key.replace(/([A-Z])/g, ' $1')}
+                      </label>
+                      {key === 'voice' ? (
+                        <select 
+                          value={settings.voice}
+                          onChange={(e) => updateSettings({ ...settings, voice: e.target.value })}
+                          style={{ width: '100%', padding: '5px' }}
+                        >
+                          {VOICES.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      ) : key === 'avatar' ? (
+                        <select 
+                          value={settings.avatar}
+                          onChange={(e) => updateSettings({ ...settings, avatar: e.target.value })}
+                          style={{ width: '100%', padding: '5px' }}
+                        >
+                          {AVATARS.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                      ) : (
+                        <input 
+                          type={key === 'accessToken' ? 'password' : 'text'}
+                          value={settings[key]}
+                          onChange={(e) => updateSettings({ ...settings, [key]: e.target.value })}
+                          style={{ width: '100%', padding: '5px' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => setIsSettingsOpen(false)} style={{ width: '100%', padding: '10px', background: '#00875a', color: 'white', border: 'none', borderRadius: '4px' }}>Done</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </>
