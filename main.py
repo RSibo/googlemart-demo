@@ -25,13 +25,12 @@ print(f"DEBUG: cwd={os.getcwd()}")
 app = fastapi.FastAPI()
 
 # Serve React assets
-app.mount("/assets", StaticFiles(directory=os.path.join(current_dir, "static/assets")), name="assets")
-# Also keep old static for magic_icon.png if needed, or better move it to frontend/public
-# For now let's mount the old static as well
+app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+# Keep /static for images and other assets
 app.mount("/static", StaticFiles(directory=os.path.join(current_dir, "static")), name="static")
 
 # Setup templates to point to React's dist
-templates = Jinja2Templates(directory=os.path.join(current_dir, "templates"))
+templates = Jinja2Templates(directory=os.path.join(current_dir, "frontend/dist"))
 
 from mock_data import MOCK_CART, PRODUCTS, RECIPES
 from sous_chefs import (
@@ -167,7 +166,7 @@ async def websocket_endpoint(websocket: fastapi.WebSocket):
                 }
                 return Client(**kwargs)
                 
-        adk_model = TokenGemini(model_id)
+        adk_model = TokenGemini(model=model_id)
         chef = ExecutiveChef(model=adk_model)
         chef_agent = chef.get_agent()
 
